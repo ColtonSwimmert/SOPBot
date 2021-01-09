@@ -7,7 +7,7 @@ import os
 import subprocess
 import asyncio
 
-
+# Sorry, I'm kinda retar-
 class discordChat(): # handler for chat related functions
 
     
