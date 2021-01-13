@@ -10,7 +10,6 @@ import asyncio
 
 class discordChat(): # handler for chat related functions
 
-    
     # command
     commands = {}
     discordClient = None
@@ -25,8 +24,7 @@ class discordChat(): # handler for chat related functions
                 "wutface": self.displayWut,
                 "repeat": self.repeat,
                 "flip" : self.flipCoin
-                }
-        
+                }        
             
     async def tryBuzz(self,message):
         await message.channel.send("buzzing")

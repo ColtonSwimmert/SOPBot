@@ -15,7 +15,7 @@ from DiscordHandler import *
 class MyClient(discord.Client):
     
     # prefix members
-    prefix  = "$OP "
+    prefix = "$OP "
     minecraftPrefix = "$OPCRAFT "
     
     # Handlers

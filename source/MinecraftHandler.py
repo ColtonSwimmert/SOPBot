@@ -109,7 +109,7 @@ class Minecraft():
             
             #change to the correct directory
             self.worldProcess = subprocess.Popen(command,stdout=subprocess.PIPE,
-                stdin=subprocess.PIPE,text=True)
+                stdin=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
                 
             await message.channel.send("Starting Minecraft world. Using world: " + self.selectedWorld)
             
@@ -126,12 +126,11 @@ class Minecraft():
             # parse through stdout until server setup
             self.myThread = threading.Thread(target=self.readOutput)
             self.myThread.start()
-
             
         os.chdir(currentDirectory) # after setup return to original dir
             
     
-    async def readOutput(self): 
+    def readOutput(self): #used to initialize when server is started
         
         while True:
         
@@ -143,7 +142,12 @@ class Minecraft():
                 print("time taken to start server: " + splitOutput[4])
                 self.worldOnline = True
                 break
-            
+        
+        #once server is setup create a asyncio thread to update discord status
+        self.discordStatus = threading.Thread(target=asyncio.run,args=(self.updateDiscordStatus(),))
+        self.discordStatus.start()
+        
+    
     
     async def stopWorld(self,message):
         
@@ -223,19 +227,28 @@ class Minecraft():
        
     async def listPlayers(self,message):
         
-        self.flushStdout()
         if self.worldOnline == False:
             
             await message.channel.send("No world hosted currently...")
             return
         
+        print("writting command")
         # run command and obtain result
         self.worldProcess.stdin.write("list\n")
         self.worldProcess.stdin.flush()
-        commandResult = self.worldProcess.stdout.readline()
         
+        while True:
         
-        outputString = commandResult
+            currentOutput = self.worldProcess.stdout.readline()
+            self.worldProcess.stdout.flush()
+            splitOutput = currentOutput.split()
+            print(currentOutput)
+            
+            if "players" in splitOutput: # need to find more optimal way to flush
+        
+                outputString = currentOutput
+                break
+        
         #splitResult = commandResult.split()
         #playerCounter = int(splitResult[2])
         
@@ -253,31 +266,35 @@ class Minecraft():
                 
         await message.channel.send(outputString)
 
-    def flushStdout(self): # flush stdout prior to running a command
-        (output, err) = self.worldProcess.communicate()
 
     async def updateDiscordStatus(self): # works but need to update flush prior to updating status
-        self.flushStdout()
         
         while(True):
-            gameName = "Hosting " + self.selectedWorld + "(" + str(self.getPlayerCount()) + "/5 Players)" 
+            currentPlayers , maxPlayers = self.getPlayerCount()
+            gameName = "Hosting " + self.selectedWorld + "(" + currentPlayers + "/" + maxPlayers + " Players)" 
             discordActivity = discord.Game(name=gameName)
             await self.discordClient.change_presence(activity=discordActivity)
-            time.sleep(10)
+            time.sleep(15)
+            
+            if self.worldOnline == False: # destroy thread since no world is hosted. Reset discord status once done
+                return
 
 
     def getPlayerCount(self): # dont return player names, just count
-        
-        self.flushStdout()
         
         if self.worldOnline == False:
             return "" # return nothing since no world is open
         
         self.worldProcess.stdin.write("list\n")
         self.worldProcess.stdin.flush()
-        playerCount = self.worldProcess.stdout.readline().split()[2]
         
-        print(str(playerCount))
-        return playerCount
-        
-        
+        while(True):
+            
+            currentLine = self.worldProcess.stdout.readline()
+            
+            if "players" in currentLine:
+                
+                splitLine = currentLine.split()
+                return splitLine[5] , splitLine[10] # index 1: current players, index 2: player limit
+                
+ 
