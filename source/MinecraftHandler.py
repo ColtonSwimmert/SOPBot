@@ -54,6 +54,7 @@ class Minecraft():
             await message.channel.send("No world currently selected. List worlds with \"$OPCRAFT listworlds\"")
             return
         
+        
         originalDirectory = os.getcwd()
         os.chdir("../Minecraft/" + self.selectedWorld + "/")
         
@@ -113,24 +114,14 @@ class Minecraft():
                 
             await message.channel.send("Starting Minecraft world. Using world: " + self.selectedWorld)
             
-            #await asyncio.sleep(180) # currently just wait for 3 minutes to start world
-            #await message.channel.send(self.selectedWorld + " is ready!")
-            
-            #while True:
-            #    consumeLine = self.worldProcess.stdout.readline()
-            #   self.worldProcess.stdout.flush()
-            #    if not consumeLine:
-            #    break
-            
-            
             # parse through stdout until server setup
-            self.myThread = threading.Thread(target=self.readOutput)
+            self.myThread = threading.Thread(target=asyncio.run,args=(self.readOutput(),))
             self.myThread.start()
             
         os.chdir(currentDirectory) # after setup return to original dir
             
     
-    def readOutput(self): #used to initialize when server is started
+    async def readOutput(self): #used in thread to determine when server is configured
         
         while True:
         
@@ -139,14 +130,13 @@ class Minecraft():
             splitOutput = currentOutput.split()
         
             if splitOutput[3] == "Done":
-                print("time taken to start server: " + splitOutput[4])
+                #await message.channel.send(self.selectedWorld + " is ready!")
                 self.worldOnline = True
                 break
         
         #once server is setup create a asyncio thread to update discord status
         self.discordStatus = threading.Thread(target=asyncio.run,args=(self.updateDiscordStatus(),))
         self.discordStatus.start()
-        
     
     
     async def stopWorld(self,message):
@@ -155,16 +145,14 @@ class Minecraft():
         self.worldProcess.stdin.write("list\n")
         self.worldProcess.stdin.flush()
         worldList = self.worldProcess.stdout.readline()
-        #playerCount = int(worldList[2])
         
+        playersOnline, maxPlayerCount = self.getPlayerCount()
         
-        
-        #if playerCount > 0:
-            #errorMessage = ""
-            ##errorMessage += "Could not close server due to " + worldList[2] + " players connected to the world.\n"
+        if playersOnline != "0": # check if there is atleast 1 player online
             
-            #await message.channel.send(errorMessage)
-           # return
+            await message.channel.send("Could not close server due to " + playersOnline + " being online...")
+            return
+        
         
         # stop the server
         self.worldProcess.stdin.write("stop\n")
@@ -176,12 +164,6 @@ class Minecraft():
         self.worldProcess.terminate() # terminate the process on a stop call
         self.worldProcess = None
         self.worldOnline = False
-        
-        
-        #self.myThread.stop()
-        #self.myThread = None
-        #discordActivity = discord.Game(name="Not hosting")
-        #await self.discordClient.change_presence(activity=discordActivity)
         
          
     def modifyWorldSettings(self):
@@ -232,7 +214,7 @@ class Minecraft():
             await message.channel.send("No world hosted currently...")
             return
         
-        print("writting command")
+        print("writing command")
         # run command and obtain result
         self.worldProcess.stdin.write("list\n")
         self.worldProcess.stdin.flush()
@@ -248,21 +230,6 @@ class Minecraft():
         
                 outputString = currentOutput
                 break
-        
-        #splitResult = commandResult.split()
-        #playerCounter = int(splitResult[2])
-        
-        #outputString = "There are currently " + splitResult[2] + " users online. "
-        
-        
-        #if playerCounter  > 0:
-            
-            #outputString += "Online users:\n"
-            
-            #for user in splitResult[10:]:
-                
-                #outputString += user + "\n"
-                
                 
         await message.channel.send(outputString)
 

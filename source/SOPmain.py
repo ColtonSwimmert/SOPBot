@@ -45,7 +45,6 @@ class MyClient(discord.Client):
                 message.content = message.content.lstrip(key)
                 await self.handlerCommands(message,key)
                 return 
-    
 
 
     async def handlerCommands(self,message,messagePrefix): # send commands to the respective handlers
