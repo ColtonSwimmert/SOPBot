@@ -17,6 +17,8 @@ class MyClient(discord.Client):
     # prefix members
     prefix = "$OP "
     minecraftPrefix = "$OPCRAFT "
+    reactionPrefix = "~"
+    
     
     # Handlers
     #minecraftHandler = Minecraft()
@@ -29,9 +31,12 @@ class MyClient(discord.Client):
     
     async def on_ready(self):
         print('Logged on as {0}!'.format(self.user))
+        
+        
         self.handlers = {
              self.prefix : discordChat(self),
-             self.minecraftPrefix : Minecraft(self)
+             self.minecraftPrefix : Minecraft(self),
+             self.reactionPrefix : discordReactions()
             }
 
     async def close(self):
@@ -41,6 +46,13 @@ class MyClient(discord.Client):
         
         
     async def on_message(self, message):
+        # might want to look into some optimizations for this
+        
+        if message.content.startswith(self.reactionPrefix):
+            
+            # post reaction
+            await self.handlers[message.content[0]].postReaction(message)
+            return
         
         # parse a command and send to proper handler
         for key in self.handlers:
@@ -50,6 +62,7 @@ class MyClient(discord.Client):
                 message.content = message.content.lstrip(key)
                 await self.handlerCommands(message,key)
                 return 
+        
 
 
     async def handlerCommands(self,message,messagePrefix): # send commands to the respective handlers

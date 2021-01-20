@@ -54,15 +54,9 @@ class discordUserEvents():
         fileFormat = ["extension","AuthorID","AuthorName","date"]
         
         
-        
         # add unique name for file before appending data
         imageNameCounter = 1
         name = fileINFO[0].lower()
-
-        
-        for key in discordUserEvents.EventInfo:
-            print(key)
-        
 
         
         # find the correct index for filename if name is already taken
@@ -75,7 +69,6 @@ class discordUserEvents():
                     
                 name = name + str(imageNameCounter)
                 imageNameCounter += 1
-        
         
         
         # add additional information about event added
@@ -139,13 +132,27 @@ class discordReactions(discordUserEvents):
 
     
     def __init__(self): # load reaction images from reaction directory
-        
+        self.imagePath = "../Event_Files/"
+        self.commands = {}
         self.reactions = {}
         super().__init__()
         
-    def postReaction(self): 
-        pass
-         
+    async def postReaction(self,message): 
+        
+        reactionName = message.content.lstrip(message.content[0])
+        
+        # if in reaction list then post
+        if reactionName in discordUserEvents.EventInfo:
+            
+            fileEXT = discordUserEvents.EventInfo[reactionName]["extension"]
+            myFile = discord.File(self.imagePath + fileEXT + "/" + reactionName + "." + fileEXT,filename=reactionName + "." + fileEXT)
+            await message.channel.send(file=myFile)
+        
+        else:
+            
+            await message.channel.send(reactionName + " is not a valid reaction...")
+        
+        
     async def addReaction(self, message):
         
         # ensure there is an attachment 
@@ -197,7 +204,7 @@ class discordReactions(discordUserEvents):
         
         
         # save file and display info to chat
-        await eventAttachment.save(eventInformation[0] + "." + eventInformation[1])
+        await eventAttachment.save(self.imagePath + fileEXT + "/" + eventInformation[0] + "." + eventInformation[1])
         
         # send message in chat
         await message.channel.send("Created new reaction <" + eventInformation[0] + "> Author: " + eventInformation[3] + " (" + eventInformation[4] + ")")
@@ -214,11 +221,6 @@ class botPermission():
     '''
     prevent some us
     '''
-    
-
-
-
-
 
 
 class discordChat(): # handler for chat related functions

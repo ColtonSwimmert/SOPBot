@@ -44,6 +44,7 @@ class Minecraft():
                         "listplayers" : self.listPlayers
                         }
         
+        self.minecraftPath = "../Minecraft/"
         self.discordClient = discordClient
 
      
@@ -172,9 +173,12 @@ class Minecraft():
      
     async def selectWorld(self,message): 
         
-        originalDirectory = os.getcwd()
-        os.chdir("../Minecraft/")
-        worldNames = os.listdir()
+        #originalDirectory = os.getcwd()
+        #os.chdir("../Minecraft/")
+        #worldNames = os.listdir()
+        
+        worldNames = os.listdir(self.minecraftPath)
+        
         
         worldName = message.content.lower()
         outputString = ""
@@ -193,10 +197,7 @@ class Minecraft():
         
     async def listWorlds(self,message):
        
-       originalDirectory = os.getcwd()
-       
-       os.chdir("../Minecraft/")
-       worlds = os.listdir()
+       worlds = os.listdir(self.minecraftPath)
        
        worldListing = "List of worlds currently available:\n"
        
