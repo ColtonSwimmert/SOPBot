@@ -34,7 +34,12 @@ class MyClient(discord.Client):
              self.minecraftPrefix : Minecraft(self)
             }
 
-
+    async def close(self):
+        # tasks to run prior to closing the discord bot.
+        pass
+        
+        
+        
     async def on_message(self, message):
         
         # parse a command and send to proper handler
