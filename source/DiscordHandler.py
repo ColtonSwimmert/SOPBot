@@ -14,7 +14,7 @@ class discordUserEvents():
     '''
     
     JSON_FILE_NAME = "testJsonFile.json"
-    EventInfo = {} # make a dict for testing prior to having data already in json
+    EventInfo = None
     
     
     def __init__(self): # load data from json file. Update json while program is running
@@ -22,16 +22,12 @@ class discordUserEvents():
         if discordUserEvents.EventInfo != None: #constructor has already been run
             return
         
-        
         try:
             jsonFile = open(self.JSON_FILE_NAME,"r")
             discordUserEvents.EventInfo = json.load(jsonFile)
             jsonFile.close()
-        
-            # for now
-            discordUserEvents.EventInfo = {}
             
-        except IOError:
+        except (IOError, ValueError) as e:
             print("Warning json file not found. Creating new json file.")
             os.system("touch " + discordUserEvents.JSON_FILE_NAME)
             discordUserEvents.EventInfo = {}
@@ -43,13 +39,13 @@ class discordUserEvents():
             # after dumping json will set dictionary to none
             
             jsonFile = open(discordUserEvents.JSON_FILE_NAME,"w")            
-            json.dumps(discordUserEvents.EventInfo)
+            json.dump(discordUserEvents.EventInfo,jsonFile,indent=4)
+            jsonFile.close()
             discordUserEvents.EventInfo = None
     
         
     def addEventINFO(self,fileINFO): # store metadata from image added
         
-        # format of file INFO
         # format for data[fileName, fileEXT, AuthorID, AuthorName, date]
         fileFormat = ["extension","AuthorID","AuthorName","date"]
         
@@ -89,24 +85,26 @@ class discordUserEvents():
     def removeEventINFO(self, fileName): # remove an event
         
         # obtain the full filename of the file to be deleted
-        fileEXT = discordUserEvents.EventInfo[fileName]["fileEXT"]
-        fullName = fileName + "." + discordUserEvents.EventInfo[fileName]["fileEXT"]
+        event = discordUserEvents.EventInfo[fileName]
+        fileEXT = event["extension"]
+        fullName = fileName + "." + fileEXT
         
         
         # move to the file directory and remove the file
-        currentDirectory = os.getcwd()
-        os.chdir("../Event_Files/" + fileEXT)
-        
+        #currentDirectory = os.getcwd()
+        #os.chdir("../Event_Files/" + fileEXT)
+        filePath = "../Event_Files/" + fileEXT + "/" + fullName
         
         # check if file exists
-        if os.path.exists(fullName):
-            os.remove(fileName)
+        if os.path.exists(filePath):
+            os.remove(filePath)
         else:
             print("error file doesnt exist...")
         
+        discordUserEvents.EventInfo.pop(fileName)
         
         # go back to the original directory after deleting the file and update json dictionary
-        os.chdir("../../source/")
+        #os.chdir("../../source/")
         
     def loadEventInfo(self): # find info about an event
         pass
@@ -164,23 +162,21 @@ class discordReactions(discordUserEvents):
         eventAttachment = message.attachments[0]
         fileEXT = str(eventAttachment.filename.split(".")[1])
         
-            
+        
         # obtain fileName and EXT
         messageContent = message.content.split()
         
         
         # make sure that we are getting the filename
         contentLength = len(messageContent)
-        fileName = messageContent
         
         if contentLength < 1:
             print(str(messageContent))
             await message.channel.send("Missing reaction name.")
             return
         
-        if contentLength == 1 or contentLength > 1: # if more text is included afterwards
-            fileName = messageContent[0]
         
+        fileName = messageContent[0]
         
         # format for data[fileName, fileEXT, AuthorID, AuthorName, date]
         eventInformation = []
@@ -209,6 +205,33 @@ class discordReactions(discordUserEvents):
         # send message in chat
         await message.channel.send("Created new reaction <" + eventInformation[0] + "> Author: " + eventInformation[3] + " (" + eventInformation[4] + ")")
         
+        
+    async def removeReaction(self,message):
+        # get information about author before sending to remove event
+        
+        authorID = message.author.id
+        fileName = message.content
+        response = ""
+        event = None
+        
+        try:
+            event = discordUserEvents.EventInfo[fileName]
+        
+        except KeyError:
+            await message.channel.send(fileName + " does not exist!")
+            return
+            
+        
+        if event["AuthorID"] == authorID:
+            
+            self.removeEventINFO(fileName)
+            response = fileName + " has been removed!"
+        
+        else:
+            response = "You are not the author of this reaction!"
+        
+        
+        await message.channel.send(response)
             
         
 class discordSoundBoard(discordUserEvents): #bot will join and play the sound clip available
@@ -237,8 +260,8 @@ class discordChat(): # handler for chat related functions
         
         self.commands = {
                 "buzz" : self.tryBuzz,
-                "wutface": self.displayWut,
-                "addreaction": self.addReaction,
+                "addreaction" : self.addReaction,
+                "removereaction" : self.removeReaction,
                 "flip" : self.flipCoin
                 }        
             
@@ -247,16 +270,16 @@ class discordChat(): # handler for chat related functions
         buzzer.on()
         time.sleep(1)
         buzzer.off()   
-    
-     
-    async def displayWut(self,message):
-    
-        await message.channel.send(file=discord.File('wutface.jpg'))
 		
      
     async def addReaction(self,message):
         
         await self.reactions.addReaction(message)
+
+
+    async def removeReaction(self,message):
+        
+        await self.reactions.removeReaction(message)
 
 
     async def flipCoin(self,message):

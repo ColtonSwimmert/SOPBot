@@ -5,6 +5,7 @@ import threading
 import time
 from datetime import datetime
 import os
+import sys
 import subprocess
 import json
 import asyncio
@@ -39,14 +40,24 @@ class MyClient(discord.Client):
              self.reactionPrefix : discordReactions()
             }
 
-    async def close(self):
+    async def startCleanUP(self):
         # tasks to run prior to closing the discord bot.
-        pass
         
+        self.handlers[self.reactionPrefix].cleanUp()
+        print("SOP going offline")
+        await self.logout()
         
         
     async def on_message(self, message):
         # might want to look into some optimizations for this
+        
+        
+        # for now make simple so I can do other things
+        if message.content.startswith("!"):
+            
+            if message.content[1:] == "close":
+                await self.startCleanUP() # close program
+                return
         
         if message.content.startswith(self.reactionPrefix):
             
@@ -62,8 +73,6 @@ class MyClient(discord.Client):
                 message.content = message.content.lstrip(key)
                 await self.handlerCommands(message,key)
                 return 
-        
-
 
     async def handlerCommands(self,message,messagePrefix): # send commands to the respective handlers
         
@@ -104,7 +113,6 @@ class MyClient(discord.Client):
 idFile = open("botID.txt","r")
 botID = idFile.read().rstrip('\n') # read id and remove '\n'
 idFile.close()
-
 
 client = MyClient()
 client.run(botID)
