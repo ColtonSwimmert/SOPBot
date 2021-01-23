@@ -7,6 +7,8 @@ import os
 import subprocess
 import asyncio
 import json
+import youtube_dl
+import discord
 
 class discordUserEvents():
     '''
@@ -160,7 +162,7 @@ class discordReactions(discordUserEvents):
         
         # obtain only the first attachment and its fileName
         eventAttachment = message.attachments[0]
-        fileEXT = str(eventAttachment.filename.split(".")[1])
+        fileEXT = eventAttachment.filename.split(".")[1]
         
         
         # obtain fileName and EXT
@@ -237,14 +239,53 @@ class discordReactions(discordUserEvents):
 class discordSoundBoard(discordUserEvents): #bot will join and play the sound clip available
     
     def __init__(self):
+        
+        self.queue = []
+        self.soundPlaying = False
+
+    async def playSound(self, message):
+        
+        soundName = message.content.lstrip("!")
+        
+        #for clip in self.queue:
+        channel = message.author.voice.channel
+        voice = await channel.connect()
+        
+        currentDirectory = os.getcwd()
+        voice.play(discord.FFmpegPCMAudio(currentDirectory + "/" + soundName + ".mp3"))
+        
+        while(voice.is_playing()):
+            time.sleep(1)
+        
+        await voice.disconnect()
+
+    
+    async def stopSound(self,message):
         pass
-     
-
-class botPermission():
-    '''
-    prevent some us
-    '''
-
+    
+    async def addClip(self,message):
+        
+        
+        content = message.content.split(" ")[1:] # obtain youtubelink and name
+        if(len(content) != 2):
+            await message.channel.send("didnt work...")
+            return
+            
+        
+        downloadThread = threading.Thread(target=self.downloadSoundClip,args=(content,))
+        downloadThread.start()
+    
+    
+    def downloadSoundClip(self,clipArgs): # obtain the mp3 for the soundclip
+        
+        ydl_opts = {'postprocessors': [{'key': 'FFmpegExtractAudio','preferredcodec': 'mp3','preferredquality': '192'}], 'outtmpl' : clipArgs[1]}
+        with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([clipArgs[0]])
+            
+        # if we cant assign a download location then move mp3 below
+        
+        
+    
 
 class discordChat(): # handler for chat related functions
 
@@ -255,8 +296,15 @@ class discordChat(): # handler for chat related functions
     
     def __init__(self, discordClient = None):
         
+        #handlers
         self.discordClient = discordClient
         self.reactions = discordReactions() # testing
+        self.soundBoard = discordSoundBoard() #testing
+        
+        
+        # members
+        self.downloadThread = None
+        
         
         self.commands = {
                 "buzz" : self.tryBuzz,
@@ -280,8 +328,8 @@ class discordChat(): # handler for chat related functions
     async def removeReaction(self,message):
         
         await self.reactions.removeReaction(message)
-
-
+        
+        
     async def flipCoin(self,message):
     
         await message.channel.send("Flipping...")

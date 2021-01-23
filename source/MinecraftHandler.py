@@ -143,9 +143,9 @@ class Minecraft():
     async def stopWorld(self,message):
         
         # determine if there are players currently on server
-        self.worldProcess.stdin.write("list\n")
-        self.worldProcess.stdin.flush()
-        worldList = self.worldProcess.stdout.readline()
+        #self.worldProcess.stdin.write("list\n")
+        #self.worldProcess.stdin.flush()
+        #worldList = self.worldProcess.stdout.readline()
         
         playersOnline, maxPlayerCount = self.getPlayerCount()
         
@@ -163,8 +163,11 @@ class Minecraft():
         await message.channel.send("saving and closing " + self.selectedWorld)
             
         self.worldProcess.terminate() # terminate the process on a stop call
+        
+        # reset minecraft settings
         self.worldProcess = None
         self.worldOnline = False
+        self.selectedWorld = None
         
          
     def modifyWorldSettings(self):
@@ -204,8 +207,8 @@ class Minecraft():
        for world in worlds:
            
            worldListing += world + ", "
-        
-       await message.channel.send(worldListing)
+    
+       await message.channel.send(worldListing.rstrip(", "))
        os.chdir(originalDirectory)
        
     async def listPlayers(self,message):
@@ -245,6 +248,7 @@ class Minecraft():
             time.sleep(15)
             
             if self.worldOnline == False: # destroy thread since no world is hosted. Reset discord status once done
+                await self.discordClient.change_presence(activity=None)
                 return
 
 

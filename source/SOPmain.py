@@ -19,11 +19,7 @@ class MyClient(discord.Client):
     prefix = "$OP "
     minecraftPrefix = "$OPCRAFT "
     reactionPrefix = "~"
-    
-    
-    # Handlers
-    #minecraftHandler = Minecraft()
-    #chatHandler = discordChat()
+    soundPrefix = "!"
     
     
     # client handler dictionary
@@ -37,7 +33,8 @@ class MyClient(discord.Client):
         self.handlers = {
              self.prefix : discordChat(self),
              self.minecraftPrefix : Minecraft(self),
-             self.reactionPrefix : discordReactions()
+             self.reactionPrefix : discordReactions(),
+             self.soundPrefix : discordSoundBoard()
             }
 
     async def startCleanUP(self):
@@ -58,6 +55,17 @@ class MyClient(discord.Client):
             if message.content[1:] == "close":
                 await self.startCleanUP() # close program
                 return
+                
+            splitContent = message.content.split()
+            
+            
+            if splitContent[0].lower() == "!addclip":
+                await self.handlers["!"].addClip(message)
+                return
+                
+            
+            await self.handlers["!"].playSound(message)
+            return
         
         if message.content.startswith(self.reactionPrefix):
             
@@ -102,7 +110,6 @@ class MyClient(discord.Client):
             
             await message.channel.send(errorMessage)
         else:
-            
             await handler.commands[command](message)
 
 
