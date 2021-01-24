@@ -62,7 +62,8 @@ class MyClient(discord.Client):
             if splitContent[0].lower() == "!addclip":
                 await self.handlers["!"].addClip(message)
                 return
-                
+            
+            
             
             await self.handlers["!"].playSound(message)
             return

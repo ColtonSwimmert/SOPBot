@@ -110,7 +110,17 @@ class discordUserEvents():
         
     def loadEventInfo(self): # find info about an event
         pass
+
+    def obtainAuthorInformation(self,message, container):
+
+        #provide a container for the information
+
+        author = message.author 
         
+        container.append(author.id)
+        container.append(author.name)
+        container.append(str(datetime.now()))
+
     def ifAuthor(self):
         pass
         
@@ -188,13 +198,8 @@ class discordReactions(discordUserEvents):
         eventInformation.append(fileName) #filename
         eventInformation.append(fileEXT)
         
-        
-        # append author information
-        author = message.author
-        
-        eventInformation.append(author.id)
-        eventInformation.append(author.name)
-        eventInformation.append(str(datetime.now()))
+        #obtain author info
+        self.obtainAuthorInformation(message,eventInformation)
         
         
         # send info to addEventINFO
@@ -242,39 +247,87 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
         
         self.queue = []
         self.soundPlaying = False
+        self.mp3Path = "../Event_Files/mp3/"
+        self.currentVoice = None
+        
 
     async def playSound(self, message):
         
-        soundName = message.content.lstrip("!")
-        
-        #for clip in self.queue:
-        channel = message.author.voice.channel
-        voice = await channel.connect()
-        
-        currentDirectory = os.getcwd()
-        voice.play(discord.FFmpegPCMAudio(currentDirectory + "/" + soundName + ".mp3"))
-        
-        while(voice.is_playing()):
-            time.sleep(1)
-        
-        await voice.disconnect()
+        self.queue.append(message.content) # add to queue
 
-    
+        if self.soundPlaying:     
+            return
+
+        self.soundPlaying = True # start playing sound
+        channel = message.author.voice.channel
+        self.currentVoice = await channel.connect()
+
+
+        for sound in self.queue:
+            soundName = sound.lstrip("!")
+
+            #for clip in self.queue:
+            soundFile = self.mp3Path + soundName + ".mp3"
+            
+            if not os.path.isfile(soundFile): # if file doesnt exist
+                await message.channel.send(soundName + " not found!")
+                continue
+
+
+            self.currentVoice.play(discord.FFmpegPCMAudio(soundFile))
+
+            while self.currentVoice.is_playing():
+                await asyncio.sleep(1)
+           
+        # once done disconnect and set to None
+        await self.currentVoice.disconnect()
+        self.currentVoice = None
+        self.soundPlaying = False
+        self.queue.clear()
+
+
     async def stopSound(self,message):
-        pass
+        
+        if self.soundPlaying:
+
+            self.currentVoice.stop()
+            await self.currentVoice.disconnect()
+            self.currentVoice = None
+            self.soundPlaying = False
+            self.queue.clear()
+
     
     async def addClip(self,message):
         
         
         content = message.content.split(" ")[1:] # obtain youtubelink and name
-        if(len(content) != 2):
-            await message.channel.send("didnt work...")
-            return
-            
+
+
+        # downloads the clip 
+        try:
+            ydl_opts = {'postprocessors': [{'key': 'FFmpegExtractAudio','preferredcodec': 'mp3','preferredquality': '192'}], 'outtmpl' : content[1]}
+            with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([content[0]])
         
-        downloadThread = threading.Thread(target=self.downloadSoundClip,args=(content,))
-        downloadThread.start()
-    
+        except Exception:
+            await message.channel.send("Unable to create event for <" + content[1] + ">")
+            return
+
+
+        # move mp3 to correct directory
+        os.system("mv " + content[1] + ".mp3 " + self.mp3Path)
+
+
+        # add author information to json
+        eventInfo = []
+        eventInfo.append(content[1])
+        eventInfo.append(".mp3")
+        self.obtainAuthorInformation(message,eventInfo)
+        self.addEventINFO(eventInfo)
+
+        # send message in chat
+        await message.channel.send("Created new clip <" + eventInfo[0] + "> Author: " + eventInfo[3] + " (" + eventInfo[4] + ")")
+
     
     def downloadSoundClip(self,clipArgs): # obtain the mp3 for the soundclip
         
@@ -282,10 +335,13 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
         with youtube_dl.YoutubeDL(ydl_opts) as ydl:
             ydl.download([clipArgs[0]])
             
-        # if we cant assign a download location then move mp3 below
+
+        eventInfo = []
+        eventInfo.append(clipArgs[1])
+        eventInfo.append("mp3")
+
+        discordUserEvents.obtainAuthorInformation()
         
-        
-    
 
 class discordChat(): # handler for chat related functions
 
@@ -346,7 +402,3 @@ class discordChat(): # handler for chat related functions
             output = "Tails!"
         
         await message.channel.send(output)
-
-
-
-
