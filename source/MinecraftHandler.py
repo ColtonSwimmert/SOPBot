@@ -176,14 +176,12 @@ class Minecraft():
      
     async def selectWorld(self,message): 
         
-        #originalDirectory = os.getcwd()
-        #os.chdir("../Minecraft/")
-        #worldNames = os.listdir()
-        
         worldNames = os.listdir(self.minecraftPath)
         
         
-        worldName = message.content.lower()
+        worldName = message.content.lower().lstrip()
+        print(worldName)
+
         outputString = ""
         
         for worldIndex in range(len(worldNames)):

@@ -93,8 +93,6 @@ class discordUserEvents():
         
         
         # move to the file directory and remove the file
-        #currentDirectory = os.getcwd()
-        #os.chdir("../Event_Files/" + fileEXT)
         filePath = "../Event_Files/" + fileEXT + "/" + fullName
         
         # check if file exists
@@ -105,8 +103,6 @@ class discordUserEvents():
         
         discordUserEvents.EventInfo.pop(fileName)
         
-        # go back to the original directory after deleting the file and update json dictionary
-        #os.chdir("../../source/")
         
     def loadEventInfo(self): # find info about an event
         pass
@@ -114,7 +110,6 @@ class discordUserEvents():
     def obtainAuthorInformation(self,message, container):
 
         #provide a container for the information
-
         author = message.author 
         
         container.append(author.id)
@@ -123,7 +118,8 @@ class discordUserEvents():
 
     def ifAuthor(self):
         pass
-        
+    
+    
     def checkDirectory(self,fileEXT):
         # determine that the directory that contains this filetype exists. if not add it
         
@@ -140,16 +136,20 @@ class discordReactions(discordUserEvents):
     Additional: Image modifications, distortions, gray scales, etc
     '''
 
-    
+
     def __init__(self): # load reaction images from reaction directory
         self.imagePath = "../Event_Files/"
-        self.commands = {}
         self.reactions = {}
+        self.commands = {
+            "" : self.postReaction,
+            "addreaction" : self.addReaction,
+            "removereaction" : self.removeReaction
+        }
         super().__init__()
         
     async def postReaction(self,message): 
         
-        reactionName = message.content.lstrip(message.content[0])
+        reactionName = message.content
         
         # if in reaction list then post
         if reactionName in discordUserEvents.EventInfo:
@@ -249,7 +249,13 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
         self.soundPlaying = False
         self.mp3Path = "../Event_Files/mp3/"
         self.currentVoice = None
-        
+        self.commands = {
+            "" : self.playSound,
+            "stopsound" : self.stopSound,
+            "addclip" : self.addClip
+        }
+
+        super().__init__()
 
     async def playSound(self, message):
         
@@ -299,9 +305,8 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
     
     async def addClip(self,message):
         
-        
-        content = message.content.split(" ")[1:] # obtain youtubelink and name
-
+        content = message.content.split(" ") # obtain youtubelink and name
+        content[1] = content[1].lower()
 
         # downloads the clip 
         try:
@@ -321,28 +326,14 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
         # add author information to json
         eventInfo = []
         eventInfo.append(content[1])
-        eventInfo.append(".mp3")
+        eventInfo.append("mp3")
         self.obtainAuthorInformation(message,eventInfo)
         self.addEventINFO(eventInfo)
 
         # send message in chat
         await message.channel.send("Created new clip <" + eventInfo[0] + "> Author: " + eventInfo[3] + " (" + eventInfo[4] + ")")
 
-    
-    def downloadSoundClip(self,clipArgs): # obtain the mp3 for the soundclip
         
-        ydl_opts = {'postprocessors': [{'key': 'FFmpegExtractAudio','preferredcodec': 'mp3','preferredquality': '192'}], 'outtmpl' : clipArgs[1]}
-        with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([clipArgs[0]])
-            
-
-        eventInfo = []
-        eventInfo.append(clipArgs[1])
-        eventInfo.append("mp3")
-
-        discordUserEvents.obtainAuthorInformation()
-        
-
 class discordChat(): # handler for chat related functions
 
     # command
@@ -354,8 +345,6 @@ class discordChat(): # handler for chat related functions
         
         #handlers
         self.discordClient = discordClient
-        self.reactions = discordReactions() # testing
-        self.soundBoard = discordSoundBoard() #testing
         
         
         # members
@@ -364,8 +353,6 @@ class discordChat(): # handler for chat related functions
         
         self.commands = {
                 "buzz" : self.tryBuzz,
-                "addreaction" : self.addReaction,
-                "removereaction" : self.removeReaction,
                 "flip" : self.flipCoin
                 }        
             
@@ -374,16 +361,6 @@ class discordChat(): # handler for chat related functions
         buzzer.on()
         time.sleep(1)
         buzzer.off()   
-		
-     
-    async def addReaction(self,message):
-        
-        await self.reactions.addReaction(message)
-
-
-    async def removeReaction(self,message):
-        
-        await self.reactions.removeReaction(message)
         
         
     async def flipCoin(self,message):

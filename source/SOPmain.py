@@ -40,79 +40,59 @@ class MyClient(discord.Client):
     async def startCleanUP(self):
         # tasks to run prior to closing the discord bot.
         
-        self.handlers[self.reactionPrefix].cleanUp()
+        self.handlers[self.reactionPrefix].cleanUp() # only have to do one of inherited classes
         print("SOP going offline")
         await self.logout()
         
         
     async def on_message(self, message):
-        # might want to look into some optimizations for this
         
-        
-        # for now make simple so I can do other things
-        if message.content.startswith("!"):
-            
-            if message.content[1:] == "close":
-                await self.startCleanUP() # close program
-                return
-                
-            splitContent = message.content.split()
-            
-            
-            if splitContent[0].lower() == "!addclip":
-                await self.handlers["!"].addClip(message)
-                return
-            
-            
-            
-            await self.handlers["!"].playSound(message)
-            return
-        
-        if message.content.startswith(self.reactionPrefix):
-            
-            # post reaction
-            await self.handlers[message.content[0]].postReaction(message)
-            return
-        
+        handler = None
+        command = None
+
+        # putting this here for now until I find a better place to put
+        if message.content.startswith("`close"):
+            await self.startCleanUP()
+
+
         # parse a command and send to proper handler
         for key in self.handlers:
             
             if message.content.startswith(key): 
                 
-                message.content = message.content.lstrip(key)
-                await self.handlerCommands(message,key)
-                return 
+                message.content = message.content.replace(key, "")              
+                handler = self.handlers[key]
+                command = self.getCommand(message.content)
+                break
 
-    async def handlerCommands(self,message,messagePrefix): # send commands to the respective handlers
         
-        # obtain handler, command, and remove the command from message
-        handler = self.handlers[messagePrefix]
-        parsedInput = message.content.split(" ")
-        command = parsedInput[0].lower()
-        
-        
-        if len(parsedInput) == 1:
-            
-            message.content = "" # give empty parameter
-        else:    
-            message.content = parsedInput[1].lower() 
-        
-        
-        function2Call = None
-        try: 
-            function2Call = handler.commands[command]
-            
-        except KeyError:
-            
-            errorMessage = command + " is not part of the " + messagePrefix + " namespace..."
-            
-        
-        if function2Call == None: # cant run function in try block or else infinite loop may occur on error.
-            
-            await message.channel.send(errorMessage)
-        else:
+        if command == None: # prevents coroutine issues
+            await asyncio.sleep(0)
+            return
+
+
+        # send command
+        if command in handler.commands: # attempt to lookup function
+            message.content = message.content.replace(command + " ", "")
             await handler.commands[command](message)
+        elif "" in handler.commands: 
+            await handler.commands[""](message) # default function
+        else:
+            await asyncio.sleep(0) # do nothing
+        
 
+    
+    def getCommand(self,content): # obtain the command string 
+
+        commandString = ""
+
+        for char in content:
+            if char == " ":
+                break
+
+            commandString += char
+
+        return commandString
 
 
 ########################################################################
