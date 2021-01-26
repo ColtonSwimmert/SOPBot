@@ -103,9 +103,6 @@ class discordUserEvents():
         
         discordUserEvents.EventInfo.pop(fileName)
         
-        
-    def loadEventInfo(self): # find info about an event
-        pass
 
     def obtainAuthorInformation(self,message, container):
 
@@ -116,9 +113,16 @@ class discordUserEvents():
         container.append(author.name)
         container.append(str(datetime.now()))
 
-    def ifAuthor(self):
-        pass
-    
+    def isAuthor(self,message):
+
+        try:
+            if discordUserEvents.EventInfo[message.content]["AuthorID"] == message.author.id:
+                return True
+        
+        except KeyError:
+            pass
+
+        return False
     
     def checkDirectory(self,fileEXT):
         # determine that the directory that contains this filetype exists. if not add it
@@ -126,8 +130,57 @@ class discordUserEvents():
         if not os.path.isdir("../Event_Files/" + fileEXT):
             # if this directory doesnt exist then make it
             os.mkdir("../Event_Files/" + fileEXT)
+
+
+    @staticmethod
+    async def aboutEvent(message):
+
+        eventName = message.content
+        eventDict = discordUserEvents.EventInfo
+
+        if not eventName in eventDict:
+            await asyncio.sleep(0) # do nothing
+            return
+
+        eventDict = eventDict[eventName]
+        eventOutput = "```\n"
+        eventOutput += "Event: " + eventName + "\n"
+        eventOutput += "---------------------\n"
+
+        eventOutput += "AuthorName: " + eventDict["AuthorName"] + "\n"
+        eventOutput += "AuthorID: " + str(eventDict["AuthorID"]) + "\n"
+        eventOutput += "Date: " + eventDict["date"] + "\n"
+
+        eventOutput += "```"
+
+        await message.channel.send(eventOutput)
+
+
+    @staticmethod
+    async def listEvents(message):
+
+        fullList = "```\n"
+        fullList += "SOPBOT EVENT COMMANDS\n"
+        fullList += "---------------------\n"
+
+        reactions = "Reaction(~): "
+        soundboardClips = "SoundBoard(!): "
+
+        for key in discordUserEvents.EventInfo:
+            
+            if discordUserEvents.EventInfo[key]["extension"][0] == "m":
+
+                soundboardClips += key + ", " 
+            else:
+                reactions += key + ", "
         
         
+        fullList += reactions.rstrip(", ") + "\n\n"
+        fullList += soundboardClips.rstrip(", ") + "\n"
+        fullList += "```"
+
+        await message.channel.send(fullList)
+
 
 class discordReactions(discordUserEvents):
     '''
@@ -252,7 +305,8 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
         self.commands = {
             "" : self.playSound,
             "stopsound" : self.stopSound,
-            "addclip" : self.addClip
+            "addclip" : self.addClip,
+            "removeclip" : self.removeClip
         }
 
         super().__init__()
@@ -320,7 +374,8 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
 
 
         # move mp3 to correct directory
-        os.system("mv " + content[1] + ".mp3 " + self.mp3Path)
+        #os.system("mv " + content[1] + ".mp3 " + self.mp3Path)
+        fullName = content[1] + ".mp3"
 
 
         # add author information to json
@@ -330,10 +385,52 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
         self.obtainAuthorInformation(message,eventInfo)
         self.addEventINFO(eventInfo)
 
+
+        # determine if giving a clip range
+        try:
+            startTime = content[2]
+            endTime = content[3]
+
+            command = "ffmpeg -i " + fullName + " -vn -acodec copy -ss "
+            command += startTime
+            command += " -to "
+            command += endTime
+            command += " temp.mp3"
+
+
+            os.system(command) # create copy
+            os.system("rm " + fullName) # remove original
+            os.system("mv temp.mp3 " + self.mp3Path + fullName)
+
+        except Exception:
+            os.system("mv " + content[1] + ".mp3 " + self.mp3Path)
+            await asyncio.sleep(0) # do nothing
+            
+
         # send message in chat
         await message.channel.send("Created new clip <" + eventInfo[0] + "> Author: " + eventInfo[3] + " (" + eventInfo[4] + ")")
 
-        
+    
+    async def removeClip(self,message):
+
+        if not self.isAuthor(message):
+            await asyncio.sleep(0)
+            return
+
+        self.removeEventINFO(message.content)
+
+        await message.channel.send("Removed " + message.content + "!")
+
+
+    def formatClipTime(self,providedTime):
+        # format time provided to bot 
+
+        #HH:MM:SS
+        clipTimes = providedTime.split(":")
+        timeCount = len(clipTimes) - 3 
+        outputString = ""
+
+
 class discordChat(): # handler for chat related functions
 
     # command
@@ -353,9 +450,16 @@ class discordChat(): # handler for chat related functions
         
         self.commands = {
                 "buzz" : self.tryBuzz,
-                "flip" : self.flipCoin
-                }        
+                "flip" : self.flipCoin,
+                "listevents" : discordUserEvents.listEvents,
+                "aboutevent" : discordUserEvents.aboutEvent
+                }    
+
+    def cleanUp(self):
+
+        pass # do nothing for now    
             
+
     async def tryBuzz(self,message):
         await message.channel.send("buzzing")
         buzzer.on()

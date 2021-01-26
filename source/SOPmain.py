@@ -40,7 +40,10 @@ class MyClient(discord.Client):
     async def startCleanUP(self):
         # tasks to run prior to closing the discord bot.
         
-        self.handlers[self.reactionPrefix].cleanUp() # only have to do one of inherited classes
+        for key in self.handlers: # clean up all handlers prior to exit
+
+            self.handlers[key].cleanUp()
+
         print("SOP going offline")
         await self.logout()
         

@@ -47,6 +47,10 @@ class Minecraft():
         self.minecraftPath = "../Minecraft/"
         self.discordClient = discordClient
 
+    
+    def cleanUp(self): # clean up before turning off bot
+        pass
+
      
     async def displayWorldSettings(self,message):
         
