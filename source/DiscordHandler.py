@@ -164,7 +164,7 @@ class discordUserEvents():
         fullList += "---------------------\n"
 
         reactions = "Reaction(~): "
-        soundboardClips = "SoundBoard(!): "
+        soundboardClips = "SoundBoard($): "
 
         for key in discordUserEvents.EventInfo:
             
@@ -298,53 +298,81 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
     
     def __init__(self):
         
-        self.queue = []
+        self.queue = [] # will swap to deque later
+        self.downloadQueue = []
+        self.isDownloading = False
+        self.waitUntil = False
         self.soundPlaying = False
         self.mp3Path = "../Event_Files/mp3/"
         self.currentVoice = None
+        self.waitTime = 120 # time until bot disconnects from VC
+
+
         self.commands = {
-            "" : self.playSound,
             "stopsound" : self.stopSound,
             "addclip" : self.addClip,
-            "removeclip" : self.removeClip
+            "removeclip" : self.removeClip,
+            "skip" : self.skip,
+            "" : self.playSound
         }
 
         super().__init__()
 
     async def playSound(self, message):
         
+        # append clip, return if already playing
         self.queue.append(message.content) # add to queue
-
         if self.soundPlaying:     
             return
 
-        self.soundPlaying = True # start playing sound
+
+        # determine if user is in a channel
         channel = message.author.voice.channel
+        if channel == None:
+            await message.channel.send("You are not in a voice channel!")
+            return
+
+
+        # connect and start playing 
         self.currentVoice = await channel.connect()
+        self.soundPlaying = True 
+        timerIndex = 0
+        
 
+        while(timerIndex < self.waitTime):
 
-        for sound in self.queue:
-            soundName = sound.lstrip("!")
+            # play sounds queued
+            for sound in self.queue:
 
-            #for clip in self.queue:
-            soundFile = self.mp3Path + soundName + ".mp3"
+                timerIndex = 0
+                soundName = sound.lower().lstrip("!")
+
+                #for clip in self.queue:
+                soundFile = self.mp3Path + soundName + ".mp3"
             
-            if not os.path.isfile(soundFile): # if file doesnt exist
-                await message.channel.send(soundName + " not found!")
-                continue
+
+                if not os.path.isfile(soundFile): # if file doesnt exist
+                    await message.channel.send(soundName + " not found!")
+                    continue
 
 
-            self.currentVoice.play(discord.FFmpegPCMAudio(soundFile))
+                self.currentVoice.play(discord.FFmpegPCMAudio(soundFile))
 
-            while self.currentVoice.is_playing():
-                await asyncio.sleep(1)
-           
+                while self.currentVoice.is_playing():
+                    await asyncio.sleep(1)
+                    if self.soundPlaying == False:
+                        return
+
+
+            self.queue.clear() 
+            await asyncio.sleep(1)
+            timerIndex += 1
+
         # once done disconnect and set to None
         await self.currentVoice.disconnect()
         self.currentVoice = None
         self.soundPlaying = False
         self.queue.clear()
-
 
     async def stopSound(self,message):
         
@@ -356,8 +384,35 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
             self.soundPlaying = False
             self.queue.clear()
 
-    
+    async def skip(self,message):
+
+        self.currentVoice.stop() # set sound to stop
+        await asyncio.sleep(0) # do nothing
+
     async def addClip(self,message):
+
+        self.downloadQueue.append(message)
+
+        if self.isDownloading:
+            return
+
+        self.isDownloading = True
+
+        for newClip in self.downloadQueue:
+            self.waitUntil = True
+            threadDownload = threading.Thread(target=asyncio.run,args=(self.downloadClip(newClip),))
+            threadDownload.start()
+
+            while(self.waitUntil):
+                await asyncio.sleep(1)
+
+            await message.channel.send(message.content)
+
+        self.downloadQueue.clear()
+        self.isDownloading = False
+
+
+    async def downloadClip(self,message):
         
         content = message.content.split(" ") # obtain youtubelink and name
         content[1] = content[1].lower()
@@ -369,7 +424,9 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
                 ydl.download([content[0]])
         
         except Exception:
-            await message.channel.send("Unable to create event for <" + content[1] + ">")
+            #await message.channel.send("Unable to create event for <" + content[1] + ">")
+            message.content = "Unable to create event for <" + content[1] + ">"
+            self.waitUntil = False
             return
 
 
@@ -388,8 +445,8 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
 
         # determine if giving a clip range
         try:
-            startTime = content[2]
-            endTime = content[3]
+            startTime = self.formatClipTime(content[2])
+            endTime = self.formatClipTime(content[3])
 
             command = "ffmpeg -i " + fullName + " -vn -acodec copy -ss "
             command += startTime
@@ -405,11 +462,11 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
         except Exception:
             os.system("mv " + content[1] + ".mp3 " + self.mp3Path)
             await asyncio.sleep(0) # do nothing
-            
 
+        self.waitUntil = False
         # send message in chat
-        await message.channel.send("Created new clip <" + eventInfo[0] + "> Author: " + eventInfo[3] + " (" + eventInfo[4] + ")")
-
+        #await message.channel.send("Created new clip <" + eventInfo[0] + "> Author: " + eventInfo[3] + " (" + eventInfo[4] + ")")
+        message.content = "Created new clip <" + eventInfo[0] + "> Author: " + eventInfo[3] + " (" + eventInfo[4] + ")"
     
     async def removeClip(self,message):
 
@@ -424,11 +481,23 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
 
     def formatClipTime(self,providedTime):
         # format time provided to bot 
+        
 
         #HH:MM:SS
         clipTimes = providedTime.split(":")
         timeCount = len(clipTimes) - 3 
         outputString = ""
+
+        while(timeCount < 0):
+            outputString += "00:"
+            timeCount += 1
+        
+        for selectedTime in clipTimes:
+            outputString += selectedTime + ":"
+
+        outputString = outputString.rstrip(":")
+
+        return outputString
 
 
 class discordChat(): # handler for chat related functions

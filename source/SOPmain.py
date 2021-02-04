@@ -19,7 +19,7 @@ class MyClient(discord.Client):
     prefix = "$OP "
     minecraftPrefix = "$OPCRAFT "
     reactionPrefix = "~"
-    soundPrefix = "!"
+    soundPrefix = "$"
     
     
     # client handler dictionary

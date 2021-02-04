@@ -41,7 +41,8 @@ class Minecraft():
                         "listworlds" : self.listWorlds,
                         "startworld" : self.startWorld,
                         "stopworld" : self.stopWorld,
-                        "listplayers" : self.listPlayers
+                        "listplayers" : self.listPlayers,
+                        "send" : self.message2Server
                         }
         
         self.minecraftPath = "../Minecraft/"
@@ -73,8 +74,9 @@ class Minecraft():
         desiredOutputKeys = ["gamemode","pvp","difficulty","max-players","spawn-protection","max-world-size"]
         keyLength = len(desiredOutputKeys)
         keyIndex = 0
+
         for line in output:
-            print(line)
+    
             currentLine = line.split("=")
             
             if currentLine[0] == desiredOutputKeys[keyIndex]:
@@ -88,11 +90,15 @@ class Minecraft():
         
         await message.channel.send(outputString)
         os.chdir(originalDirectory) 
-    
-    
+
+
+
+    async def createWorld(self,message):
+        pass
+
+
+
     async def startWorld(self,message):
-    #java -Xms512M -Xmx1008M -jar ~/tempSOPbot/SOPbot/Minecraft/world2/spigot-1.16.3.jar nogui
-        
         
         if self.selectedWorld == None:
             await message.channel.send("No world selected. Please select a world or create a new one...")
@@ -120,13 +126,13 @@ class Minecraft():
             await message.channel.send("Starting Minecraft world. Using world: " + self.selectedWorld)
             
             # parse through stdout until server setup
-            self.myThread = threading.Thread(target=asyncio.run,args=(self.readOutput(),))
+            self.myThread = threading.Thread(target=asyncio.run,args=(self.readOutput(message),))
             self.myThread.start()
             
         os.chdir(currentDirectory) # after setup return to original dir
             
     
-    async def readOutput(self): #used in thread to determine when server is configured
+    async def readOutput(self,message): #used in thread to determine when server is configured
         
         while True:
         
@@ -135,21 +141,15 @@ class Minecraft():
             splitOutput = currentOutput.split()
         
             if splitOutput[3] == "Done":
-                #await message.channel.send(self.selectedWorld + " is ready!")
                 self.worldOnline = True
                 break
         
         #once server is setup create a asyncio thread to update discord status
-        self.discordStatus = threading.Thread(target=asyncio.run,args=(self.updateDiscordStatus(),))
+        self.discordStatus = threading.Thread(target=asyncio.run,args=(self.updateDiscordStatus(message),))
         self.discordStatus.start()
     
     
     async def stopWorld(self,message):
-        
-        # determine if there are players currently on server
-        #self.worldProcess.stdin.write("list\n")
-        #self.worldProcess.stdin.flush()
-        #worldList = self.worldProcess.stdout.readline()
         
         playersOnline, maxPlayerCount = self.getPlayerCount()
         
@@ -158,20 +158,22 @@ class Minecraft():
             await message.channel.send("Could not close server due to " + playersOnline + " being online...")
             return
         
-        
         # stop the server
         self.worldProcess.stdin.write("stop\n")
         self.worldProcess.stdin.flush()
         self.worldProcess.stdin.close()
         self.worldProcess.stdout.close()
         await message.channel.send("saving and closing " + self.selectedWorld)
-            
+
+        # setworld to none so threads will stop
+        self.selectedWorld = None     
+
         self.worldProcess.terminate() # terminate the process on a stop call
         
         # reset minecraft settings
         self.worldProcess = None
         self.worldOnline = False
-        self.selectedWorld = None
+        
         
          
     def modifyWorldSettings(self):
@@ -181,10 +183,7 @@ class Minecraft():
     async def selectWorld(self,message): 
         
         worldNames = os.listdir(self.minecraftPath)
-        
-        
         worldName = message.content.lower().lstrip()
-        print(worldName)
 
         outputString = ""
         
@@ -211,7 +210,6 @@ class Minecraft():
            worldListing += world + ", "
     
        await message.channel.send(worldListing.rstrip(", "))
-       os.chdir(originalDirectory)
        
     async def listPlayers(self,message):
         
@@ -240,35 +238,62 @@ class Minecraft():
         await message.channel.send(outputString)
 
 
-    async def updateDiscordStatus(self): # works but need to update flush prior to updating status
+    async def updateDiscordStatus(self,message): # works but need to update flush prior to updating status
         
+        closeCounter = 0
+
         while(True):
+            
+            if self.selectedWorld == None: # destroy thread since no world is hosted. Reset discord status once done
+                await self.discordClient.change_presence(activity=None)
+                return
+
             currentPlayers , maxPlayers = self.getPlayerCount()
             gameName = "Hosting " + self.selectedWorld + "(" + currentPlayers + "/" + maxPlayers + " Players)" 
             discordActivity = discord.Game(name=gameName)
-            await self.discordClient.change_presence(activity=discordActivity)
-            time.sleep(15)
+
+
+            if currentPlayers == "0":
+
+                if closeCounter >= 75: # wait for 25 minutes before closing
+                    await self.stopWorld(message)
+                    return 
+
+                closeCounter += 1
             
-            if self.worldOnline == False: # destroy thread since no world is hosted. Reset discord status once done
-                await self.discordClient.change_presence(activity=None)
-                return
+            else:
+                
+                closeCounter = 0
+
+            await self.discordClient.change_presence(activity=discordActivity)
+            await asyncio.sleep(20)
 
 
     def getPlayerCount(self): # dont return player names, just count
         
-        if self.worldOnline == False:
-            return "" # return nothing since no world is open
+        if self.selectedWorld == None:
+            return '0' , '0' # return nothing since no world is open
         
         self.worldProcess.stdin.write("list\n")
         self.worldProcess.stdin.flush()
         
-        while(True):
-            
-            currentLine = self.worldProcess.stdout.readline()
+        for currentLine in self.worldProcess.stdout:
             
             if "players" in currentLine:
                 
                 splitLine = currentLine.split()
                 return splitLine[5] , splitLine[10] # index 1: current players, index 2: player limit
-                
- 
+
+
+    async def message2Server(self,message): # send message to hosted minecraft server
+
+        if self.selectedWorld == None:
+            await message.content.add_reaction(':thumbdown:')
+            return
+        
+        userMessage = "say " + message.content
+
+        self.worldProcess.stdin.write(userMessage)
+        self.worldProcess.stdin.flush()
+
+        await message.content.add_reaction(':thumbup:')
