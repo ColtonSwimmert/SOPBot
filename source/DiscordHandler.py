@@ -53,21 +53,22 @@ class discordUserEvents():
         
         
         # add unique name for file before appending data
-        imageNameCounter = 1
+        imageNameCounter = 0
         name = fileINFO[0].lower()
-
+        tempName = name
         
+            
         # find the correct index for filename if name is already taken
         while(True):
-
-                if name not in discordUserEvents.EventInfo: # add event to list
+                
+                if tempName not in discordUserEvents.EventInfo: # add event to list
                     
+                    name = tempName
                     discordUserEvents.EventInfo[name] = {}
                     break
                     
-                name = name + str(imageNameCounter)
                 imageNameCounter += 1
-        
+                tempName = name + str(imageNameCounter)
         
         # add additional information about event added
         index = 1
@@ -429,11 +430,7 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
             self.waitUntil = False
             return
 
-
-        # move mp3 to correct directory
-        #os.system("mv " + content[1] + ".mp3 " + self.mp3Path)
-        fullName = content[1] + ".mp3"
-
+        originalName = content[1]
 
         # add author information to json
         eventInfo = []
@@ -442,6 +439,11 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
         self.obtainAuthorInformation(message,eventInfo)
         self.addEventINFO(eventInfo)
 
+
+        # move mp3 to correct directory
+        #os.system("mv " + content[1] + ".mp3 " + self.mp3Path)
+        fullName = originalName + ".mp3"
+        
 
         # determine if giving a clip range
         try:
@@ -457,14 +459,13 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
 
             os.system(command) # create copy
             os.system("rm " + fullName) # remove original
-            os.system("mv temp.mp3 " + self.mp3Path + fullName)
+            os.system("mv temp.mp3 " + self.mp3Path + eventInfo[0] + ".mp3")
 
         except Exception:
-            os.system("mv " + content[1] + ".mp3 " + self.mp3Path)
+            os.system("mv " + fullName + " " + self.mp3Path + eventInfo[0] + ".mp3") # renames and moves to new directory
             await asyncio.sleep(0) # do nothing
 
         self.waitUntil = False
-        # send message in chat
         #await message.channel.send("Created new clip <" + eventInfo[0] + "> Author: " + eventInfo[3] + " (" + eventInfo[4] + ")")
         message.content = "Created new clip <" + eventInfo[0] + "> Author: " + eventInfo[3] + " (" + eventInfo[4] + ")"
     

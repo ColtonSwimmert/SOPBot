@@ -10,6 +10,7 @@ import asyncio
 
 
 
+
 class Minecraft():
     
     # not all of these will be utilized but some are
@@ -106,7 +107,7 @@ class Minecraft():
         
         if self.worldOnline:
                 
-            await message.channel.send("World, " + self.selectedWorld + ", is already being hosted!")
+            await message.channel.send("World is already being hosted!")
             return
             
         # move to the directory that contains the spigot Jar
@@ -157,13 +158,18 @@ class Minecraft():
             
             await message.channel.send("Could not close server due to " + playersOnline + " being online...")
             return
-        
+
+        await message.channel.send("saving and closing " + self.selectedWorld)
+        self.terminateWorld()
+
+    
+    def terminateWorld(self):
+
         # stop the server
         self.worldProcess.stdin.write("stop\n")
         self.worldProcess.stdin.flush()
         self.worldProcess.stdin.close()
         self.worldProcess.stdout.close()
-        await message.channel.send("saving and closing " + self.selectedWorld)
 
         # setworld to none so threads will stop
         self.selectedWorld = None     
@@ -255,8 +261,9 @@ class Minecraft():
 
             if currentPlayers == "0":
 
-                if closeCounter >= 75: # wait for 25 minutes before closing
-                    await self.stopWorld(message)
+                if closeCounter >= 25: # wait for 25 minutes before closing
+                    await self.discordClient.change_presence(activity=None)
+                    self.terminateWorld()
                     return 
 
                 closeCounter += 1
@@ -286,14 +293,16 @@ class Minecraft():
 
 
     async def message2Server(self,message): # send message to hosted minecraft server
-
+        
         if self.selectedWorld == None:
-            await message.content.add_reaction(':thumbdown:')
+            thumbsDown = ':thumbsdown:'
+            await message.channel.send(thumbsDown)
             return
         
-        userMessage = "say " + message.content
+        userMessage = "say " + message.content + "\n"
 
         self.worldProcess.stdin.write(userMessage)
         self.worldProcess.stdin.flush()
 
-        await message.content.add_reaction(':thumbup:')
+        thumbsUp = ':thumbsup:'
+        await message.channel.send(thumbsUp)
