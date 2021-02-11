@@ -9,8 +9,6 @@ import json
 import asyncio
 
 
-
-
 class Minecraft():
     
     # not all of these will be utilized but some are
@@ -51,7 +49,9 @@ class Minecraft():
 
     
     def cleanUp(self): # clean up before turning off bot
-        pass
+        
+        if self.worldOnline:
+            self.terminateWorld()
 
      
     async def displayWorldSettings(self,message):
@@ -224,7 +224,6 @@ class Minecraft():
             await message.channel.send("No world hosted currently...")
             return
         
-        print("writing command")
         # run command and obtain result
         self.worldProcess.stdin.write("list\n")
         self.worldProcess.stdin.flush()
@@ -233,10 +232,8 @@ class Minecraft():
         
             currentOutput = self.worldProcess.stdout.readline()
             self.worldProcess.stdout.flush()
-            splitOutput = currentOutput.split()
-            print(currentOutput)
             
-            if "players" in splitOutput: # need to find more optimal way to flush
+            if "players" in currentOutput: # need to find more optimal way to flush
         
                 outputString = currentOutput
                 break
@@ -299,7 +296,7 @@ class Minecraft():
             await message.channel.send(thumbsDown)
             return
         
-        userMessage = "say " + message.content + "\n"
+        userMessage = "say " + message.author.name + " - " + message.content + "\n"
 
         self.worldProcess.stdin.write(userMessage)
         self.worldProcess.stdin.flush()

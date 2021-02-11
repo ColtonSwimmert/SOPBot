@@ -8,7 +8,6 @@ import subprocess
 import asyncio
 import json
 import youtube_dl
-import discord
 
 class discordUserEvents():
     '''
@@ -209,12 +208,15 @@ class discordReactions(discordUserEvents):
         if reactionName in discordUserEvents.EventInfo:
             
             fileEXT = discordUserEvents.EventInfo[reactionName]["extension"]
+
+            if fileEXT == ".mp3":
+                return
+
             myFile = discord.File(self.imagePath + fileEXT + "/" + reactionName + "." + fileEXT,filename=reactionName + "." + fileEXT)
             await message.channel.send(file=myFile)
         
-        else:
-            
-            await message.channel.send(reactionName + " is not a valid reaction...")
+        
+        return
         
         
     async def addReaction(self, message):
@@ -289,7 +291,7 @@ class discordReactions(discordUserEvents):
             response = fileName + " has been removed!"
         
         else:
-            response = "You are not the author of this reaction!"
+            response = "You are not the author!"
         
         
         await message.channel.send(response)
@@ -328,7 +330,7 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
 
 
         # determine if user is in a channel
-        channel = message.author.voice.channel
+        channel = message.author.voice
         if channel == None:
             await message.channel.send("You are not in a voice channel!")
             return
@@ -353,7 +355,6 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
             
 
                 if not os.path.isfile(soundFile): # if file doesnt exist
-                    await message.channel.send(soundName + " not found!")
                     continue
 
 
@@ -441,7 +442,6 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
 
 
         # move mp3 to correct directory
-        #os.system("mv " + content[1] + ".mp3 " + self.mp3Path)
         fullName = originalName + ".mp3"
         
 
@@ -482,7 +482,6 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
 
     def formatClipTime(self,providedTime):
         # format time provided to bot 
-        
 
         #HH:MM:SS
         clipTimes = providedTime.split(":")
@@ -493,10 +492,7 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
             outputString += "00:"
             timeCount += 1
         
-        for selectedTime in clipTimes:
-            outputString += selectedTime + ":"
-
-        outputString = outputString.rstrip(":")
+        outputString += providedTime
 
         return outputString
 
@@ -514,13 +510,7 @@ class discordChat(): # handler for chat related functions
         self.discordClient = discordClient
         
         
-        # members
-        self.downloadThread = None
-        
-        
         self.commands = {
-                "buzz" : self.tryBuzz,
-                "flip" : self.flipCoin,
                 "listevents" : discordUserEvents.listEvents,
                 "aboutevent" : discordUserEvents.aboutEvent
                 }    
@@ -528,28 +518,3 @@ class discordChat(): # handler for chat related functions
     def cleanUp(self):
 
         pass # do nothing for now    
-            
-
-    async def tryBuzz(self,message):
-        await message.channel.send("buzzing")
-        buzzer.on()
-        time.sleep(1)
-        buzzer.off()   
-        
-        
-    async def flipCoin(self,message):
-    
-        await message.channel.send("Flipping...")
-        random.seed(datetime.now())
-        coinVal = random.randint(0,1)
-        output = ""
-    
-    
-        time.sleep(1.5)
-    
-        if coinVal == 0:
-            output = "Heads!"
-        else:
-            output = "Tails!"
-        
-        await message.channel.send(output)
