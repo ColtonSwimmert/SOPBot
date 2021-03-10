@@ -258,7 +258,7 @@ class Minecraft():
 
             if currentPlayers == "0":
 
-                if closeCounter >= 25: # wait for 25 minutes before closing
+                if closeCounter >= 75: # wait for 25 minutes before closing
                     await self.discordClient.change_presence(activity=None)
                     self.terminateWorld()
                     return 

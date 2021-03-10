@@ -24,7 +24,7 @@ class MyClient(discord.Client):
     
     # client handler dictionary
     handlers = {}
-    
+    timeoutList = {}
     
     async def on_ready(self):
         print('Logged on as {0}!'.format(self.user))
@@ -67,8 +67,7 @@ class MyClient(discord.Client):
                 handler = self.handlers[key]
                 command = self.getCommand(message.content)
                 break
-
-        
+            
         if command == None: # prevents coroutine issues
             await asyncio.sleep(0)
             return
@@ -83,7 +82,6 @@ class MyClient(discord.Client):
         else:
             await asyncio.sleep(0) # do nothing
         
-
     
     def getCommand(self,content): # obtain the command string 
 

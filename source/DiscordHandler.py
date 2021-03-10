@@ -9,6 +9,7 @@ import asyncio
 import json
 import youtube_dl
 
+
 class discordUserEvents():
     '''
     Base class to handle data about user added sound clips and images
@@ -113,10 +114,10 @@ class discordUserEvents():
         container.append(author.name)
         container.append(str(datetime.now()))
 
-    def isAuthor(self,message):
+    def isAuthor(self,authorID):
 
         try:
-            if discordUserEvents.EventInfo[message.content]["AuthorID"] == message.author.id:
+            if discordUserEvents.EventInfo[message.content]["AuthorID"] == authorID:
                 return True
         
         except KeyError:
@@ -180,6 +181,17 @@ class discordUserEvents():
         fullList += "```"
 
         await message.channel.send(fullList)
+
+    async def changeName(self,message):
+        pass
+        '''
+        if self.isAuthor(message.author.id):
+            
+            names = message.content.split(' ')
+
+            try:
+        '''
+
 
 
 class discordReactions(discordUserEvents):
@@ -323,6 +335,11 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
 
     async def playSound(self, message):
         
+        # determine if clip exists
+        if message.content not in discordUserEvents.EventInfo:
+            return
+
+
         # append clip, return if already playing
         self.queue.append(message.content) # add to queue
         if self.soundPlaying:     
@@ -337,7 +354,7 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
 
 
         # connect and start playing 
-        self.currentVoice = await channel.connect()
+        self.currentVoice = await channel.channel.connect()
         self.soundPlaying = True 
         timerIndex = 0
         
@@ -354,7 +371,10 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
                 soundFile = self.mp3Path + soundName + ".mp3"
             
 
-                if not os.path.isfile(soundFile): # if file doesnt exist
+                # check if file exists, if not then it was probably removed by host so remove it from event list
+                if not os.path.isfile(soundFile): 
+                    await message.channel.send(soundName + " not found!")
+                    self.removeEventINFO(soundName) # remove from listing
                     continue
 
 
@@ -416,11 +436,11 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
 
     async def downloadClip(self,message):
         
-        content = message.content.split(" ") # obtain youtubelink and name
-        content[1] = content[1].lower()
+        content = message.content.split(" ") # obtain youtubelink and name\
 
         # downloads the clip 
         try:
+            content[1] = content[1].lower()
             ydl_opts = {'postprocessors': [{'key': 'FFmpegExtractAudio','preferredcodec': 'mp3','preferredquality': '192'}], 'outtmpl' : content[1]}
             with youtube_dl.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([content[0]])
@@ -471,7 +491,7 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
     
     async def removeClip(self,message):
 
-        if not self.isAuthor(message):
+        if not self.isAuthor(message.author.id):
             await asyncio.sleep(0)
             return
 
@@ -495,7 +515,7 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
         outputString += providedTime
 
         return outputString
-
+        
 
 class discordChat(): # handler for chat related functions
 
@@ -504,6 +524,7 @@ class discordChat(): # handler for chat related functions
     discordClient = None
     reactions = None
     
+
     def __init__(self, discordClient = None):
         
         #handlers
@@ -512,9 +533,82 @@ class discordChat(): # handler for chat related functions
         
         self.commands = {
                 "listevents" : discordUserEvents.listEvents,
-                "aboutevent" : discordUserEvents.aboutEvent
+                "aboutevent" : discordUserEvents.aboutEvent,
+                "cleanitup" : self.cleanChat,
+                "timeout" : self.timeout,
+                "timeoutremaining": self.timeOutRemaining
                 }    
+
+        #timeout helpers
+        self.timeoutList = {}
+        self.timeoutRunning = False
+
 
     def cleanUp(self):
 
-        pass # do nothing for now    
+        del self.timeoutList # clear timeout list
+
+
+    async def cleanChat(self, message):
+
+        purgeCount = int(message.content) + 1 #additional to remove the clean call
+        await message.channel.purge(limit=purgeCount)
+
+
+    async def timeout(self,message): # timeout a user from all vcs
+
+        try:
+            userID = message.author.id
+            targetID = message.mentions[0]
+            time_out_time = int(message.content.split(" ")[1])
+        except Exception:
+            #targetID doesnt exist
+            asyncio.sleep(0)
+            return
+
+        if int(userID) != 140564870545408000: 
+            await message.channel.send("cannot run this command!")
+            return
+                 
+        # if already in list
+        if targetID in self.timeoutList:
+            asyncio.sleep(0) # do nothing
+            return 
+
+        self.timeoutList[targetID] = [targetID ,time_out_time,0] # message itself, the time to be in timeout, counter
+        if self.timeoutRunning:
+            asyncio.sleep(0)
+            return
+
+        while(True): # loop until everyone in timeout out of their timeout
+
+            for target in self.timeoutList: # iterate through all users in timeout
+                this = self.timeoutList[target]
+
+                if this[0].voice != None:
+                    await targetID.edit(voice_channel=None)
+
+                if this[2] < this[1]:
+                    this[2] = this[2] + 1
+
+                else: # remove this user from timeout list
+                    del self.timeoutList[target]
+
+                if len(self.timeoutList) == 0: # list empty return
+                    await asyncio.sleep(0)
+                    self.timeoutRunning = False
+                    return
+
+            await asyncio.sleep(1)
+
+    
+    async def timeOutRemaining(self,message):
+        userID = message.author.id
+
+        if userID in self.timeoutList:
+            this = self.timeoutList[userID]
+            thisRemaining = str(this[2] - this[1])
+            await message.channel.send("You have " + thisRemaining + " more seconds of timeout!")
+
+        else:
+            await message.channel.send("You are not on timeout")
