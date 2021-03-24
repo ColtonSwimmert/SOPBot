@@ -1,12 +1,6 @@
 #!/usr/bin/python
 import discord
-import random
-import threading
-import time
-from datetime import datetime
 import os
-import sys
-import subprocess
 import json
 import asyncio
 from MinecraftHandler import *
@@ -15,21 +9,16 @@ from DiscordHandler import *
 
 class MyClient(discord.Client):
     
-    # prefix members
-    prefix = "$OP "
-    minecraftPrefix = "$OPCRAFT "
-    reactionPrefix = "~"
-    soundPrefix = "$"
-    
-    
-    # client handler dictionary
-    handlers = {}
-    timeoutList = {}
-    
     async def on_ready(self):
         print('Logged on as {0}!'.format(self.user))
         
-        
+        # prefix members
+        self.prefix = "$OP "
+        self.minecraftPrefix = "$OPCRAFT "
+        self.reactionPrefix = "~"
+        self.soundPrefix = "$"
+
+        # handlers 
         self.handlers = {
              self.prefix : discordChat(self),
              self.minecraftPrefix : Minecraft(self),
@@ -38,9 +27,9 @@ class MyClient(discord.Client):
             }
 
     async def startCleanUP(self):
-        # tasks to run prior to closing the discord bot.
+        # clean up all handlers prior to exit
         
-        for key in self.handlers: # clean up all handlers prior to exit
+        for key in self.handlers: 
 
             self.handlers[key].cleanUp()
 
@@ -56,6 +45,7 @@ class MyClient(discord.Client):
         # putting this here for now until I find a better place to put
         if message.content.startswith("`close"):
             await self.startCleanUP()
+            return
 
 
         # parse a command and send to proper handler
@@ -68,7 +58,7 @@ class MyClient(discord.Client):
                 command = self.getCommand(message.content)
                 break
             
-        if command == None: # prevents coroutine issues
+        if command == None: # if no command, do nothing
             await asyncio.sleep(0)
             return
 
@@ -78,11 +68,12 @@ class MyClient(discord.Client):
             message.content = message.content.replace(command + " ", "")
             await handler.commands[command](message)
         elif "" in handler.commands: 
-            await handler.commands[""](message) # default function
+            await handler.commands[""](message) # run default function
         else:
             await asyncio.sleep(0) # do nothing
         
-    
+
+    # CLIENT HELPER FUNCTIONS
     def getCommand(self,content): # obtain the command string 
 
         commandString = ""

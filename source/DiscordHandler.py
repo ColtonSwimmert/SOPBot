@@ -10,6 +10,27 @@ import json
 import youtube_dl
 
 
+# HELPER FUNCTIONS
+def contentSplit(string,splitCount=1):
+
+    stringList = []
+
+    string += " " # append empty char
+    newString = ""
+    stringCount = 0
+    for char in string:
+        if char == " ":
+            stringList.append(newString)
+            newString = ""
+            stringCount += 1
+            if stringCount == splitCount:
+                return stringList
+        else:
+            newString += char
+
+    return stringList
+
+# Handler Classes
 class discordUserEvents():
     '''
     Base class to handle data about user added sound clips and images
@@ -53,22 +74,7 @@ class discordUserEvents():
         
         
         # add unique name for file before appending data
-        imageNameCounter = 0
-        name = fileINFO[0].lower()
-        tempName = name
-        
-            
-        # find the correct index for filename if name is already taken
-        while(True):
-                
-                if tempName not in discordUserEvents.EventInfo: # add event to list
-                    
-                    name = tempName
-                    discordUserEvents.EventInfo[name] = {}
-                    break
-                    
-                imageNameCounter += 1
-                tempName = name + str(imageNameCounter)
+        name = discordUserEvents.updateName(fileINFO[0].lower())
         
         # add additional information about event added
         index = 1
@@ -114,15 +120,12 @@ class discordUserEvents():
         container.append(author.name)
         container.append(str(datetime.now()))
 
-    def isAuthor(self,authorID):
+    def isAuthor(self,authorID,filename):
 
-        try:
-            if discordUserEvents.EventInfo[message.content]["AuthorID"] == authorID:
+        author = discordUserEvents.EventInfo.get(filename,None)
+        if author != None:
+            if author["AuthorID"] == authorID:
                 return True
-        
-        except KeyError:
-            pass
-
         return False
     
     def checkDirectory(self,fileEXT):
@@ -147,11 +150,9 @@ class discordUserEvents():
         eventOutput = "```\n"
         eventOutput += "Event: " + eventName + "\n"
         eventOutput += "---------------------\n"
-
         eventOutput += "AuthorName: " + eventDict["AuthorName"] + "\n"
         eventOutput += "AuthorID: " + str(eventDict["AuthorID"]) + "\n"
         eventOutput += "Date: " + eventDict["date"] + "\n"
-
         eventOutput += "```"
 
         await message.channel.send(eventOutput)
@@ -182,16 +183,48 @@ class discordUserEvents():
 
         await message.channel.send(fullList)
 
+    @staticmethod
+    def updateName(newName):
+
+        imageNameCounter = 0
+        tempName = newName
+        # find the correct index for filename if name is already taken
+        while(True):
+                
+            if discordUserEvents.EventInfo.get(tempName,None) == None: # add event to list
+                    
+                name = tempName
+                discordUserEvents.EventInfo[name] = {}
+                break
+                                        
+            imageNameCounter += 1
+            tempName = newName + str(imageNameCounter)
+                
+        return tempName
+
     async def changeName(self,message):
-        pass
-        '''
-        if self.isAuthor(message.author.id):
+        
+        messageContent = contentSplit(message.content,2)
+        print(messageContent)
+        if len(messageContent) < 2:
+            await message.channel.send("Missing arguments ex/ $changename <original> <new>")
+            return
+
+        originalName = messageContent[0].lower()
+        newName = messageContent[1].lower()
+
+        if self.isAuthor(message.author.id,originalName):
             
-            names = message.content.split(' ')
+            if discordUserEvents.EventInfo.get(newName,None) != None:
+                newName = discordUserEvents.updateName(newName)
+            
+            discordUserEvents.EventInfo[newName] = discordUserEvents.EventInfo.pop(originalName)
+            await message.channel.send("[Name change] new: " + newName + "old: " + originalName)
+            return
 
-            try:
-        '''
-
+        else:
+            await message.channel.send("not author of this reaction")
+            return
 
 
 class discordReactions(discordUserEvents):
@@ -208,7 +241,8 @@ class discordReactions(discordUserEvents):
         self.commands = {
             "" : self.postReaction,
             "addreaction" : self.addReaction,
-            "removereaction" : self.removeReaction
+            "removereaction" : self.removeReaction,
+            "changename" : self.changeName
         }
         super().__init__()
         
@@ -217,7 +251,7 @@ class discordReactions(discordUserEvents):
         reactionName = message.content
         
         # if in reaction list then post
-        if reactionName in discordUserEvents.EventInfo:
+        if discordUserEvents.EventInfo.get(reactionName,None) != None:
             
             fileEXT = discordUserEvents.EventInfo[reactionName]["extension"]
 
@@ -226,7 +260,6 @@ class discordReactions(discordUserEvents):
 
             myFile = discord.File(self.imagePath + fileEXT + "/" + reactionName + "." + fileEXT,filename=reactionName + "." + fileEXT)
             await message.channel.send(file=myFile)
-        
         
         return
         
@@ -289,13 +322,13 @@ class discordReactions(discordUserEvents):
         response = ""
         event = None
         
-        try:
-            event = discordUserEvents.EventInfo[fileName]
-        
-        except KeyError:
-            await message.channel.send(fileName + " does not exist!")
+
+        event = discordUserEvents.EventInfo.get(fileName,None)
+
+        if event == None:
+            await message.channel.send(fileName + "does not exist!")
             return
-            
+
         
         if event["AuthorID"] == authorID:
             
@@ -328,6 +361,7 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
             "addclip" : self.addClip,
             "removeclip" : self.removeClip,
             "skip" : self.skip,
+            "changename" : self.changeName,
             "" : self.playSound
         }
 
@@ -336,7 +370,7 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
     async def playSound(self, message):
         
         # determine if clip exists
-        if message.content not in discordUserEvents.EventInfo:
+        if discordUserEvents.EventInfo.get(message.content,None) == None:
             return
 
 
@@ -422,11 +456,14 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
 
         for newClip in self.downloadQueue:
             self.waitUntil = True
+
+            # note: need to look into asyncio.get_event_loop() function to improve 
+            # performance of this instead of busywaiting
             threadDownload = threading.Thread(target=asyncio.run,args=(self.downloadClip(newClip),))
             threadDownload.start()
 
             while(self.waitUntil):
-                await asyncio.sleep(1)
+                await asyncio.sleep(0)
 
             await message.channel.send(message.content)
 
@@ -491,7 +528,7 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
     
     async def removeClip(self,message):
 
-        if not self.isAuthor(message.author.id):
+        if not self.isAuthor(message):
             await asyncio.sleep(0)
             return
 
@@ -556,6 +593,7 @@ class discordChat(): # handler for chat related functions
 
 
     async def timeout(self,message): # timeout a user from all vcs
+        # note: need to change this functionality since it can eat up some process time
 
         try:
             userID = message.author.id
@@ -563,25 +601,27 @@ class discordChat(): # handler for chat related functions
             time_out_time = int(message.content.split(" ")[1])
         except Exception:
             #targetID doesnt exist
-            asyncio.sleep(0)
+            await asyncio.sleep(0)
             return
 
-        if int(userID) != 140564870545408000: 
-            await message.channel.send("cannot run this command!")
-            return
+        # uncommenting for fun
+        # if int(userID) != 140564870545408000: 
+        #     await message.channel.send("cannot run this command!")
+        #     return
                  
         # if already in list
         if targetID in self.timeoutList:
-            asyncio.sleep(0) # do nothing
+            await asyncio.sleep(0) # do nothing
             return 
 
         self.timeoutList[targetID] = [targetID ,time_out_time,0] # message itself, the time to be in timeout, counter
         if self.timeoutRunning:
-            asyncio.sleep(0)
+            await asyncio.sleep(0)
             return
 
         while(True): # loop until everyone in timeout out of their timeout
-
+            removeList = []
+            
             for target in self.timeoutList: # iterate through all users in timeout
                 this = self.timeoutList[target]
 
@@ -592,9 +632,12 @@ class discordChat(): # handler for chat related functions
                     this[2] = this[2] + 1
 
                 else: # remove this user from timeout list
-                    del self.timeoutList[target]
+                    removeList.append(this)
 
-                if len(self.timeoutList) == 0: # list empty return
+            for removeable in removeList:
+                self.timeoutList.pop(removeable)
+
+            if len(self.timeoutList) == 0: # list empty return
                     await asyncio.sleep(0)
                     self.timeoutRunning = False
                     return

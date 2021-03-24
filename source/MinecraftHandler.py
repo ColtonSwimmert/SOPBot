@@ -28,12 +28,10 @@ class Minecraft():
     selectedWorldDirectory = ""
     
     
-    # commands
-    commands = {}
-    
-    
     def __init__(self,discordClient = None,world = None):
-        self.commands = { # list of minecraft server commands
+
+        # list of minecraft server commands
+        self.commands = { 
                         "selectworld" : self.selectWorld,
                         "modifyworldsettings" : self.modifyWorldSettings,
                         "displayworldsettings" : self.displayWorldSettings,
@@ -46,13 +44,11 @@ class Minecraft():
         
         self.minecraftPath = "../Minecraft/"
         self.discordClient = discordClient
-
     
     def cleanUp(self): # clean up before turning off bot
         
         if self.worldOnline:
             self.terminateWorld()
-
      
     async def displayWorldSettings(self,message):
         
@@ -180,8 +176,7 @@ class Minecraft():
         self.worldProcess = None
         self.worldOnline = False
         
-        
-         
+
     def modifyWorldSettings(self):
         # implement server properties handling at a later date.
         pass
@@ -205,22 +200,16 @@ class Minecraft():
             
         await message.channel.send(outputString)
         
-    async def listWorlds(self,message):
-       
+    async def listWorlds(self,message): # display list of worlds in discord channel
        worlds = os.listdir(self.minecraftPath)
-       
        worldListing = "List of worlds currently available:\n"
-       
        for world in worlds:
-           
            worldListing += world + ", "
     
        await message.channel.send(worldListing.rstrip(", "))
        
-    async def listPlayers(self,message):
-        
+    async def listPlayers(self,message): # list players in current world
         if self.worldOnline == False:
-            
             await message.channel.send("No world hosted currently...")
             return
         
@@ -229,12 +218,10 @@ class Minecraft():
         self.worldProcess.stdin.flush()
         
         while True:
-        
             currentOutput = self.worldProcess.stdout.readline()
             self.worldProcess.stdout.flush()
             
             if "players" in currentOutput: # need to find more optimal way to flush
-        
                 outputString = currentOutput
                 break
                 
@@ -244,9 +231,7 @@ class Minecraft():
     async def updateDiscordStatus(self,message): # works but need to update flush prior to updating status
         
         closeCounter = 0
-
         while(True):
-            
             if self.selectedWorld == None: # destroy thread since no world is hosted. Reset discord status once done
                 await self.discordClient.change_presence(activity=None)
                 return
@@ -257,7 +242,6 @@ class Minecraft():
 
 
             if currentPlayers == "0":
-
                 if closeCounter >= 75: # wait for 25 minutes before closing
                     await self.discordClient.change_presence(activity=None)
                     self.terminateWorld()
@@ -266,7 +250,6 @@ class Minecraft():
                 closeCounter += 1
             
             else:
-                
                 closeCounter = 0
 
             await self.discordClient.change_presence(activity=discordActivity)
@@ -284,7 +267,6 @@ class Minecraft():
         for currentLine in self.worldProcess.stdout:
             
             if "players" in currentLine:
-                
                 splitLine = currentLine.split()
                 return splitLine[5] , splitLine[10] # index 1: current players, index 2: player limit
 
@@ -297,9 +279,7 @@ class Minecraft():
             return
         
         userMessage = "say " + message.author.name + " - " + message.content + "\n"
-
         self.worldProcess.stdin.write(userMessage)
         self.worldProcess.stdin.flush()
-
         thumbsUp = ':thumbsup:'
         await message.channel.send(thumbsUp)
