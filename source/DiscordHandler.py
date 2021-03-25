@@ -55,6 +55,8 @@ class discordUserEvents():
             os.system("touch " + discordUserEvents.JSON_FILE_NAME)
             discordUserEvents.EventInfo = {}
         
+        self.eventPath = "../Event_Files/"
+        
         
     def cleanUp(self): # when bot is closed run this to save json.
         
@@ -203,28 +205,35 @@ class discordUserEvents():
         return tempName
 
     async def changeName(self,message):
-        
-        messageContent = contentSplit(message.content,2)
-        print(messageContent)
-        if len(messageContent) < 2:
-            await message.channel.send("Missing arguments ex/ $changename <original> <new>")
-            return
-
-        originalName = messageContent[0].lower()
-        newName = messageContent[1].lower()
 
         if self.isAuthor(message.author.id,originalName):
+
+            messageContent = contentSplit(message.content,2)
+            if len(messageContent) < 2:
+                await message.channel.send("Missing arguments ex/ $changename <original> <new>")
+                return
+
+            originalName = messageContent[0].lower()
+            newName = messageContent[1].lower()
+
             
             if discordUserEvents.EventInfo.get(newName,None) != None:
                 newName = discordUserEvents.updateName(newName)
             
             discordUserEvents.EventInfo[newName] = discordUserEvents.EventInfo.pop(originalName)
-            await message.channel.send("[Name change] new: " + newName + "old: " + originalName)
-            return
+            selectedEvent = discordUserEvents.EventInfo[newName]
+            extension = selectedEvent["extension"]
+            extPath = self.eventPath + extension + "/"
+
+            originalFull = extPath + originalName + "." + extension + " " # extra space added for string padding
+            newFull = extPath + newName + "." + extension
+
+            os.system("mv " + originalFull + newFull)
+            await message.channel.send("Event change to " + newName)
 
         else:
             await message.channel.send("not author of this reaction")
-            return
+            
 
 
 class discordReactions(discordUserEvents):
@@ -352,6 +361,7 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
         self.waitUntil = False
         self.soundPlaying = False
         self.mp3Path = "../Event_Files/mp3/"
+        self.eventPath = "../Event_Files/"
         self.currentVoice = None
         self.waitTime = 120 # time until bot disconnects from VC
 
@@ -536,6 +546,14 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
 
         await message.channel.send("Removed " + message.content + "!")
 
+    async def changeName(self,message):
+        
+        if not self.soundPlaying:
+            await super().changeName(message)
+        
+        else:
+            message.channel.send("Cannot sound clips while currently playing sounds")
+
 
     def formatClipTime(self,providedTime):
         # format time provided to bot 
@@ -552,7 +570,6 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
         outputString += providedTime
 
         return outputString
-        
 
 class discordChat(): # handler for chat related functions
 

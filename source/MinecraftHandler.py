@@ -114,7 +114,7 @@ class Minecraft():
         command = newDirectory + "/startWorld.sh"
         
         
-        if self.worldOnline== False:
+        if self.worldOnline == False:
             
             #change to the correct directory
             self.worldProcess = subprocess.Popen(command,stdout=subprocess.PIPE,

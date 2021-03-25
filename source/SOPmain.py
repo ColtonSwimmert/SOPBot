@@ -64,10 +64,10 @@ class MyClient(discord.Client):
 
 
         # send command
-        if command in handler.commands: # attempt to lookup function
+        if handler.commands.get(command,None) != None: # attempt to lookup function
             message.content = message.content.replace(command + " ", "")
             await handler.commands[command](message)
-        elif "" in handler.commands: 
+        elif handler.commands.get("",None) != None: 
             await handler.commands[""](message) # run default function
         else:
             await asyncio.sleep(0) # do nothing
