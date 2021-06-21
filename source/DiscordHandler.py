@@ -11,6 +11,7 @@ import youtube_dl
 
 
 # HELPER FUNCTIONS
+
 def contentSplit(string,splitCount=1):
 
     stringList = []
@@ -38,6 +39,9 @@ class discordUserEvents():
     
     JSON_FILE_NAME = "testJsonFile.json"
     EventInfo = None
+    messageLength = 1970
+    reactionMessages = []
+    soundMessages = []
     
     
     def __init__(self): # load data from json file. Update json while program is running
@@ -56,6 +60,53 @@ class discordUserEvents():
             discordUserEvents.EventInfo = {}
         
         self.eventPath = "../Event_Files/"
+
+        # generate intial messages for reactions/soundboard clips
+
+        defaultReactionMessage = "```\n"
+        defaultReactionMessage += "SOPBOT REACTION COMMANDS\n"
+        defaultReactionMessage += "---------------------\n"
+        reactionMessage = defaultReactionMessage
+        reactionLength = len(defaultReactionMessage)
+
+
+        defaultSoundMessage = "```\n"
+        defaultSoundMessage += "SOPBOT SOUNDBOARD COMMANDS\n"
+        defaultSoundMessage += "---------------------\n"
+        soundBoardMessage = defaultSoundMessage
+        soundLength = len(defaultSoundMessage)
+
+
+        for event in discordUserEvents.EventInfo:
+            charLength = len(event)
+
+            if discordUserEvents.EventInfo[event]["extension"][0] == "m":
+                if soundLength + charLength < discordUserEvents.messageLength:
+                    soundBoardMessage += event + ", "
+                    soundLength += charLength + 2
+                else:
+                    soundBoardMessage = soundBoardMessage.rstrip(", ")
+                    soundBoardMessage += "```" # trailing message block
+                    soundMessages.append([soundBoardMessage,soundLength])
+                    soundLength = 0
+                    soundBoardMessage = defaultSoundMessage
+            else:
+                if reactionLength + charLength < discordUserEvents.messageLength:
+                    reactionMessage += event + ", "
+                    reactionLength += charLength + 2
+                else:
+                    # append to message list and set values back to default
+                    reactionMessage = reactionMessage.rstrip(", ")
+                    reactionMessage += "```"
+                    discordUserEvents.reactionMessages.append([reactionMessage,reactionLength])
+                    reactionLength = 0
+                    reactionMessage = defaultReactionMessage
+
+        # add remaining to list
+        reactionMessage += "```"
+        soundBoardMessage += "```"
+        discordUserEvents.reactionMessages.append([reactionMessage,reactionLength])
+        discordUserEvents.soundMessages.append([soundBoardMessage,soundLength])
         
         
     def cleanUp(self): # when bot is closed run this to save json.
@@ -72,8 +123,7 @@ class discordUserEvents():
     def addEventINFO(self,fileINFO): # store metadata from image added
         
         # format for data[fileName, fileEXT, AuthorID, AuthorName, date]
-        fileFormat = ["extension","AuthorID","AuthorName","date"]
-        
+        fileFormat = ["extension","AuthorID","AuthorName","date", "source"]
         
         # add unique name for file before appending data
         name = discordUserEvents.updateName(fileINFO[0].lower())
@@ -161,29 +211,14 @@ class discordUserEvents():
 
 
     @staticmethod
-    async def listEvents(message):
+    async def listReactions(message):
+        await message.channel.send(str(discordUserEvents.reactionMessages[0][0]))
 
-        fullList = "```\n"
-        fullList += "SOPBOT EVENT COMMANDS\n"
-        fullList += "---------------------\n"
 
-        reactions = "Reaction(~): "
-        soundboardClips = "SoundBoard($): "
 
-        for key in discordUserEvents.EventInfo:
-            
-            if discordUserEvents.EventInfo[key]["extension"][0] == "m":
-
-                soundboardClips += key + ", " 
-            else:
-                reactions += key + ", "
-        
-        
-        fullList += reactions.rstrip(", ") + "\n\n"
-        fullList += soundboardClips.rstrip(", ") + "\n"
-        fullList += "```"
-
-        await message.channel.send(fullList)
+    @staticmethod
+    async def listSounds(message):
+        await message.channel.send(str(discordUserEvents.soundMessages[0][0]))
 
     @staticmethod
     def updateName(newName):
@@ -367,12 +402,12 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
 
 
         self.commands = {
+            "" : self.playSound,
             "stopsound" : self.stopSound,
             "addclip" : self.addClip,
             "removeclip" : self.removeClip,
             "skip" : self.skip,
             "changename" : self.changeName,
-            "" : self.playSound
         }
 
         super().__init__()
@@ -413,7 +448,6 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
 
                 #for clip in self.queue:
                 soundFile = self.mp3Path + soundName + ".mp3"
-            
 
                 # check if file exists, if not then it was probably removed by host so remove it from event list
                 if not os.path.isfile(soundFile): 
@@ -456,7 +490,6 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
         await asyncio.sleep(0) # do nothing
 
     async def addClip(self,message):
-
         self.downloadQueue.append(message)
 
         if self.isDownloading:
@@ -473,7 +506,7 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
             threadDownload.start()
 
             while(self.waitUntil):
-                await asyncio.sleep(0)
+                await asyncio.sleep(1)
 
             await message.channel.send(message.content)
 
@@ -484,7 +517,6 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
     async def downloadClip(self,message):
         
         content = message.content.split(" ") # obtain youtubelink and name\
-
         # downloads the clip 
         try:
             content[1] = content[1].lower()
@@ -577,7 +609,6 @@ class discordChat(): # handler for chat related functions
     commands = {}
     discordClient = None
     reactions = None
-    
 
     def __init__(self, discordClient = None):
         
@@ -586,7 +617,11 @@ class discordChat(): # handler for chat related functions
         
         
         self.commands = {
-                "listevents" : discordUserEvents.listEvents,
+                "" : self.default,
+                "commands" : self.commands, 
+                "manual" : self.manual,
+                "listreactions" : discordUserEvents.listReactions,
+                "listsounds" : discordUserEvents.listSounds,
                 "aboutevent" : discordUserEvents.aboutEvent,
                 "cleanitup" : self.cleanChat,
                 "timeout" : self.timeout,
@@ -597,11 +632,20 @@ class discordChat(): # handler for chat related functions
         self.timeoutList = {}
         self.timeoutRunning = False
 
+        # command usage dictionary
+        self.usageDict = None
+        try:
+            commandFile = open("usage.json", "r")
+            self.usageDict = json.load(commandFile)
+        except IOError:
+            print("Error loading command usage file. Renamed or does not exist?")
+
+    def default(self):
+        pass
 
     def cleanUp(self):
 
         del self.timeoutList # clear timeout list
-
 
     async def cleanChat(self, message):
 
@@ -611,6 +655,7 @@ class discordChat(): # handler for chat related functions
 
     async def timeout(self,message): # timeout a user from all vcs
         # note: need to change this functionality since it can eat up some process time
+        # potentially scrap this 
 
         try:
             userID = message.author.id
@@ -620,11 +665,6 @@ class discordChat(): # handler for chat related functions
             #targetID doesnt exist
             await asyncio.sleep(0)
             return
-
-        # uncommenting for fun
-        # if int(userID) != 140564870545408000: 
-        #     await message.channel.send("cannot run this command!")
-        #     return
                  
         # if already in list
         if targetID in self.timeoutList:
@@ -663,6 +703,7 @@ class discordChat(): # handler for chat related functions
 
     
     async def timeOutRemaining(self,message):
+        # NOTE: Needs to be updated or removed.
         userID = message.author.id
 
         if userID in self.timeoutList:
@@ -672,3 +713,39 @@ class discordChat(): # handler for chat related functions
 
         else:
             await message.channel.send("You are not on timeout")
+
+    async def commands(self,message):
+        ''' 
+        Retreive all commands available from myClient class and 
+        display for user
+        '''
+        handlerDict = self.discordClient.handlers
+        commandMessage = "```\n"
+        spacing = "\n\n"
+        for prefix in handlerDict:
+            handler = handlerDict[prefix]
+            # retreive that handlers commands and label with its prefix 
+            commandMessage += "(" + prefix.rstrip() + ") " 
+            for command in handler.commands:
+                if command == "":
+                    continue
+
+                commandMessage += command + ", "
+            commandMessage = commandMessage.rstrip(", ") # remove ending seperator
+            commandMessage += spacing
+
+        commandMessage.rstrip(spacing)
+        commandMessage += "\n```"
+
+        await message.channel.send(commandMessage)
+
+    async def manual(self, message):
+        if self.usageDict == None:
+            await message.channel.send("Error! Command manual missing from host.")
+            return
+        key = message.content.split()[0].lower()
+        try:
+            commandINFO = self.usageDict[key]
+            await message.channel.send(commandINFO)
+        except KeyError:
+            await message.channel.send("Command does not exist.")

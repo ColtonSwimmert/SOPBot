@@ -62,7 +62,6 @@ class MyClient(discord.Client):
             await asyncio.sleep(0)
             return
 
-
         # send command
         if handler.commands.get(command,None) != None: # attempt to lookup function
             message.content = message.content.replace(command + " ", "")
@@ -77,13 +76,10 @@ class MyClient(discord.Client):
     def getCommand(self,content): # obtain the command string 
 
         commandString = ""
-
         for char in content:
             if char == " ":
                 break
-
             commandString += char
-
         return commandString
 
 

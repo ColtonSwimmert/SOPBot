@@ -32,6 +32,7 @@ class Minecraft():
 
         # list of minecraft server commands
         self.commands = { 
+                        "" : self.default,
                         "selectworld" : self.selectWorld,
                         "modifyworldsettings" : self.modifyWorldSettings,
                         "displayworldsettings" : self.displayWorldSettings,
@@ -45,6 +46,9 @@ class Minecraft():
         self.minecraftPath = "../Minecraft/"
         self.discordClient = discordClient
     
+    def default(self):
+        pass
+
     def cleanUp(self): # clean up before turning off bot
         
         if self.worldOnline:
