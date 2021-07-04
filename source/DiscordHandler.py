@@ -56,7 +56,9 @@ class discordUserEvents():
             
         except (IOError, ValueError) as e:
             print("Warning json file not found. Creating new json file.")
-            os.system("touch " + discordUserEvents.JSON_FILE_NAME)
+            userEventsFile = open(discordUserEvents.JSON_FILE_NAME, "w")
+            userEventsFile.close()
+            #os.system("touch " + discordUserEvents.JSON_FILE_NAME)
             discordUserEvents.EventInfo = {}
         
         self.eventPath = "../Event_Files/"
@@ -123,7 +125,7 @@ class discordUserEvents():
     def addEventINFO(self,fileINFO): # store metadata from image added
         
         # format for data[fileName, fileEXT, AuthorID, AuthorName, date]
-        fileFormat = ["extension","AuthorID","AuthorName","date", "source"]
+        fileFormat = ["extension","AuthorID","AuthorName","date"]
         
         # add unique name for file before appending data
         name = discordUserEvents.updateName(fileINFO[0].lower())

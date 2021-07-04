@@ -5,6 +5,7 @@ import json
 import asyncio
 from MinecraftHandler import *
 from DiscordHandler import *
+from SteamLobbyHandler import *
 
 
 class MyClient(discord.Client):
@@ -17,22 +18,21 @@ class MyClient(discord.Client):
         self.minecraftPrefix = "$OPCRAFT "
         self.reactionPrefix = "~"
         self.soundPrefix = "$"
+        self.lobbyPrefix = "!"
 
         # handlers 
         self.handlers = {
              self.prefix : discordChat(self),
              self.minecraftPrefix : Minecraft(self),
              self.reactionPrefix : discordReactions(),
-             self.soundPrefix : discordSoundBoard()
+             self.soundPrefix : discordSoundBoard(),
+             self.lobbyPrefix : SteamLobbyHandler()
             }
 
     async def startCleanUP(self):
         # clean up all handlers prior to exit
-        
         for key in self.handlers: 
-
             self.handlers[key].cleanUp()
-
         print("SOP going offline")
         await self.logout()
         
