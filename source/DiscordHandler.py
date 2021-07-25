@@ -42,7 +42,7 @@ class discordUserEvents():
     messageLength = 1970
     reactionMessages = []
     soundMessages = []
-    
+    fileFormat = ["extension","AuthorID","AuthorName","date", "source"]
     
     def __init__(self): # load data from json file. Update json while program is running
         
@@ -58,10 +58,21 @@ class discordUserEvents():
             print("Warning json file not found. Creating new json file.")
             userEventsFile = open(discordUserEvents.JSON_FILE_NAME, "w")
             userEventsFile.close()
-            #os.system("touch " + discordUserEvents.JSON_FILE_NAME)
             discordUserEvents.EventInfo = {}
         
         self.eventPath = "../Event_Files/"
+
+        # validate Event files and remove events stored in json that dont exist in directory
+        eventDirectories = os.listdir(self.eventPath)
+        validationDictionary = discordUserEvents.EventInfo.copy()
+        for directory in eventDirectories:
+            # go through event directories and determine if valid 
+            formatEvents = os.listdir(self.eventPath + directory)
+            for event in formatEvents:
+                eventName = event.split(".")[0]
+                if validationDictionary.get(eventName,None) == None:
+                    # event is in the Dictionary
+                    print("Deleting file " + eventName + " due to invalidation.")
 
         # generate intial messages for reactions/soundboard clips
 
@@ -77,12 +88,12 @@ class discordUserEvents():
         defaultSoundMessage += "---------------------\n"
         soundBoardMessage = defaultSoundMessage
         soundLength = len(defaultSoundMessage)
-
+        mp3Extension = "mp3"
 
         for event in discordUserEvents.EventInfo:
             charLength = len(event)
 
-            if discordUserEvents.EventInfo[event]["extension"][0] == "m":
+            if discordUserEvents.EventInfo[event]["extension"] == mp3Extension:
                 if soundLength + charLength < discordUserEvents.messageLength:
                     soundBoardMessage += event + ", "
                     soundLength += charLength + 2
@@ -110,7 +121,6 @@ class discordUserEvents():
         discordUserEvents.reactionMessages.append([reactionMessage,reactionLength])
         discordUserEvents.soundMessages.append([soundBoardMessage,soundLength])
         
-        
     def cleanUp(self): # when bot is closed run this to save json.
         
         if discordUserEvents.EventInfo != None: # to prevent multiple dumps
@@ -123,16 +133,14 @@ class discordUserEvents():
     
         
     def addEventINFO(self,fileINFO): # store metadata from image added
-        
-        # format for data[fileName, fileEXT, AuthorID, AuthorName, date]
-        fileFormat = ["extension","AuthorID","AuthorName","date"]
+        # format for data[fileName, fileEXT, AuthorID, AuthorName, date, source]
         
         # add unique name for file before appending data
         name = discordUserEvents.updateName(fileINFO[0].lower())
         
         # add additional information about event added
         index = 1
-        for DataFormat in fileFormat:
+        for DataFormat in discordUserEvents.fileFormat:
             
             discordUserEvents.EventInfo[name][DataFormat] = fileINFO[index]
             index += 1
@@ -140,10 +148,8 @@ class discordUserEvents():
         # create directory if necessary 
         self.checkDirectory(fileINFO[1])
         
-        
         # update name in list to be passed back
         fileINFO[0] = name
-        
         
     def removeEventINFO(self, fileName): # remove an event
         
@@ -160,7 +166,7 @@ class discordUserEvents():
         if os.path.exists(filePath):
             os.remove(filePath)
         else:
-            print("error file doesnt exist...")
+            print("Error, file doesnt exist.b")
         
         discordUserEvents.EventInfo.pop(fileName)
         
@@ -216,8 +222,6 @@ class discordUserEvents():
     async def listReactions(message):
         await message.channel.send(str(discordUserEvents.reactionMessages[0][0]))
 
-
-
     @staticmethod
     async def listSounds(message):
         await message.channel.send(str(discordUserEvents.soundMessages[0][0]))
@@ -242,36 +246,33 @@ class discordUserEvents():
         return tempName
 
     async def changeName(self,message):
+        messageContent = contentSplit(message.content,2)
+        
+        if len(messageContent) < 2:
+            await message.channel.send("Missing arguments ex/ $changename <original> <new>")
+            return
+        
+        originalName = messageContent[0].lower()
+        newName = messageContent[1].lower()
 
-        if self.isAuthor(message.author.id,originalName):
-
-            messageContent = contentSplit(message.content,2)
-            if len(messageContent) < 2:
-                await message.channel.send("Missing arguments ex/ $changename <original> <new>")
-                return
-
-            originalName = messageContent[0].lower()
-            newName = messageContent[1].lower()
-
+        if not self.isAuthor(message.author.id,originalName):
+            # if user is not author then terminate
+            await message.channel.send("You are not the Author of " + originalName)
+            return
             
-            if discordUserEvents.EventInfo.get(newName,None) != None:
-                newName = discordUserEvents.updateName(newName)
+        if discordUserEvents.EventInfo.get(newName,None) != None:
+            newName = discordUserEvents.updateName(newName)
             
-            discordUserEvents.EventInfo[newName] = discordUserEvents.EventInfo.pop(originalName)
-            selectedEvent = discordUserEvents.EventInfo[newName]
-            extension = selectedEvent["extension"]
-            extPath = self.eventPath + extension + "/"
+        discordUserEvents.EventInfo[newName] = discordUserEvents.EventInfo.pop(originalName)
+        selectedEvent = discordUserEvents.EventInfo[newName]
+        extension = selectedEvent["extension"]
+        extPath = self.eventPath + extension + "/"
 
-            originalFull = extPath + originalName + "." + extension + " " # extra space added for string padding
-            newFull = extPath + newName + "." + extension
+        originalFull = extPath + originalName + "." + extension + " " # extra space added for string padding
+        newFull = extPath + newName + "." + extension
 
-            os.system("mv " + originalFull + newFull)
-            await message.channel.send("Event change to " + newName)
-
-        else:
-            await message.channel.send("not author of this reaction")
-            
-
+        os.system("mv " + originalFull + newFull)
+        await message.channel.send("Event change to " + newName)
 
 class discordReactions(discordUserEvents):
     '''
@@ -347,8 +348,8 @@ class discordReactions(discordUserEvents):
         
         #obtain author info
         self.obtainAuthorInformation(message,eventInformation)
-        
-        
+        eventInformation.append("Message Attachment")
+
         # send info to addEventINFO
         self.addEventINFO(eventInformation)
         
@@ -510,7 +511,7 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
             while(self.waitUntil):
                 await asyncio.sleep(1)
 
-            await message.channel.send(message.content)
+            await newClip.channel.send(newClip.content)
 
         self.downloadQueue.clear()
         self.isDownloading = False
@@ -539,6 +540,7 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
         eventInfo.append(content[1])
         eventInfo.append("mp3")
         self.obtainAuthorInformation(message,eventInfo)
+        eventInfo.append(content[0]) # add link to source material
         self.addEventINFO(eventInfo)
 
 
@@ -557,7 +559,6 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
             command += endTime
             command += " temp.mp3"
 
-
             os.system(command) # create copy
             os.system("rm " + fullName) # remove original
             os.system("mv temp.mp3 " + self.mp3Path + eventInfo[0] + ".mp3")
@@ -568,7 +569,7 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
 
         self.waitUntil = False
         #await message.channel.send("Created new clip <" + eventInfo[0] + "> Author: " + eventInfo[3] + " (" + eventInfo[4] + ")")
-        message.content = "Created new clip <" + eventInfo[0] + "> Author: " + eventInfo[3] + " (" + eventInfo[4] + ")"
+        message.content = "Created new clip <" + eventInfo[0].lower() + "> Author: " + eventInfo[3] + " (" + eventInfo[4] + ")"
     
     async def removeClip(self,message):
 

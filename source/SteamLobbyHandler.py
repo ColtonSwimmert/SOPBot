@@ -48,18 +48,27 @@ class SteamLobbyHandler():
             "link" : self.linkAccount
         }
 
-
         # helper vars
+        self.client = discordClient
         self.steamURL = "https://store.steampowered.com/app/"
         self.lookUpUrl = "https://steamid.io/lookup/"
         self.profileLookUp = "http://steamcommunity.com/profiles/"
         self.lobbies = {} #key creatorID, value steamLobby Class
 
     def cleanUp(self):
-        pass #do nothing for now
+        # dump newly acquired information to json files
+        # dump discord/steam account links
+        accountsFile = open("steamUsers.json", "w")            
+        json.dump(self.accountLinks,accountsFile,indent=4)
+        accountsFile.close()
+        
+        # dump steam games information
+        steamGamesFile = open("steamGames.json", "w")
+        json.dump(self.gamesList,steamGamesFile,indent=4)
+        steamGamesFile.close()
 
     async def createLobby(self, message):
-        host = message.author
+        
         # splitMessage = re.split("[/]+", message.content)
 
         # if splitMessage[0] != "steam:" and splitMessage[1] != "joinlobby":
@@ -68,18 +77,17 @@ class SteamLobbyHandler():
         #     return
         
         # appID = splitMessage[2]
+
+        host = message.author
         steamID = self.accountLinks[host.id]
-        print("link: " + self.profileLookUp + str(steamID))
         profileResponse = requests.get(self.profileLookUp + str(steamID))
-        print(profileResponse)
         if profileResponse.status_code != 200:
             # error
             await message.channel.send("Error Code")
             return
 
-
         # parse for game join link
-        lobbyLink = re.search("steam://joinlobby(.*)",profileResponse.text).group(0)
+        lobbyLink = re.search("steam://joinlobby(.*)\" ",profileResponse.text).group(0).rstrip("\" ")
         if lobbyLink != None:
             lobbyLink = lobbyLink.rstrip("\"")
         else:
@@ -87,6 +95,7 @@ class SteamLobbyHandler():
             return
 
         appID = re.split("[/]+", lobbyLink)[2]
+        lobbyID = re.split("[/]+", lobbyLink)[3]
 
         # check if games data is already stored
         if self.gamesList.get(appID,None) == None:
@@ -94,11 +103,9 @@ class SteamLobbyHandler():
                 await message.channel.send("Error id")
                 return
         
-        
-        
         embeddedMessage = self.generateEmbedMessage(appID, host, lobbyLink)
         newMessage = await message.channel.send(embed=embeddedMessage)
-        self.lobbies[host.id] = steamLobby(host.id,host.name,appID,self.gamesList[appID]["Name"], newMessage, embeddedMessage)
+        self.lobbies[host.id] = steamLobby(host.id,host.name,appID,self.gamesList[appID]["Name"], newMessage, embeddedMessage, steamID, lobbyID, self)
         await self.lobbies[host.id].updatePlayers()
 
     async def embedLobby(self, message): # DONE
@@ -110,7 +117,7 @@ class SteamLobbyHandler():
 
         if splitMessage[0] != "steam:" and splitMessage[1] != "joinlobby":
             # most likely an invalid lobby
-            await message.channel.send("Invalid Lobby URL")
+            await message.channel.send("Could not retreive steam lobby")
             return
         
         appID = splitMessage[2]
@@ -127,16 +134,14 @@ class SteamLobbyHandler():
     def generateEmbedMessage(self, appID, host, lobbyLink): #DONE exception of updates
         game = self.gamesList[appID]
         embeddedMessage = discord.Embed(title = game["Name"])
-        #embeddedMessage.set_image(url="https://cdn.discordapp.com/embed/avatars/0.png")
         embeddedMessage.set_thumbnail(url=str(game["Images"][0]))
         embeddedMessage.set_author(name= host.name + "'s Lobby", icon_url=host.avatar_url)
         embeddedMessage.add_field(name="Lobby Link", value=lobbyLink, inline=False)
         return embeddedMessage
 
     def addGame(self,appID): #DONE
-        # if game not within gameList, add from steamdb
 
-        # game is not in list, retreive data from steamdb
+        # game is not in list, retreive data from steam
         response = requests.get(self.steamURL  + appID + "/")
         if response.status_code != 200:
             # error retreiving game
@@ -157,13 +162,27 @@ class SteamLobbyHandler():
         self.gamesList[appID]["Name"] = nameResult
         self.gamesList[appID]["Images"] = []
         self.gamesList[appID]["Images"].append(iconResult)
+
+        # store game image inside respective folder, if game folder doesnt exist, then create it
+        gameDirectory = "../Games_Files/" + nameResult + "/"
+        print(str(os.path.isdir(gameDirectory)))
+        if not os.path.isdir(gameDirectory):
+            os.mkdir(gameDirectory)
+
+        gameIcon = requests.get(iconResult)
+        if gameIcon.status_code == 200:
+            gameImage = open("gameIcon.jpg", "wb")
+            gameImage.write(gameIcon)
+
         return True
+    
+    async def addImage(self,message):
+        
 
     async def linkAccount(self, message):
         # Retreive users steam account information and save
         try:
             content = message.content.split("/")
-            print(content)
             steamURL = content[4]
         except IndexError:
             await message.channel.send("Error parsing steam URL. Ensure link is valid.")
@@ -179,6 +198,7 @@ class SteamLobbyHandler():
         steamID64 = match.split("\"")[1]
         # add steamID64 to json of users linked to the lobby system
         self.accountLinks[message.author.id] = steamID64 
+        await message.channel.send("Successful link!")
 
     async def displayOpenLobbies(self,message):
         lobbyEmbed = discord.Embed(title = "Open Lobbies")
@@ -191,48 +211,72 @@ class SteamLobbyHandler():
 
         await message.channel.send(embed=lobbyEmbed)
 
+    def closeLobby(self, message):
+        # delete lobby from list
+        pass
+
+
 
 class steamLobby():
     # Handle updating players and retreiving if lobby is still open
     REQUEST_KEY = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key=5355C4BC38BDD5BE29B4CE3DA2495936&"
     TEST_STRING = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key=5355C4BC38BDD5BE29B4CE3DA2495936&format=json&steamids=76561198240844888,76561198051944687"
-    def __init__(self, hostID, hostName, appID, gameName, messageID, embeddedMessage):
+    
+    def __init__(self, hostID, hostName, appID, gameName, messageID, embeddedMessage, steamID, lobbyID, lobbyHandler):
         self.hostID = None
         self.hostName = hostName
         self.appID = None
         self.gameName = None
         self.players = {}
         self.originalMessage = messageID
-        self.lobbyID = None
+        self.lobbyID = lobbyID
         self.playerCount = 1
         self.messageEmbed = embeddedMessage
         # add the host as the first person in the message
         self.messageEmbed.add_field(name="Player#" + str(self.playerCount), value=self.hostName)
-        
         self.terminateFlag = False
+        self.players[steamID] = [0, self.hostName] # format lobby position, name
+        self.lobbyHandler = lobbyHandler
+        self.thumbsUP = "👍"
 
     def cleanUp():
         self.terminateFlag = True
-
+    
+    def getMessageID(self):
+        return self.originalMessage.id
+    
+    def addPlayer(self, steamID, name):
+        # add this player to the track list for this steam lobby
+        self.players[steamID] = [self.playerCount, name]
+        self.playerCount += 1
 
     async def updatePlayers(self):
         # check status of players and ensure that they're in the lobby
         # https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key=<keyhere>&steamids=<csv steamid64 keys>
         # 5355C4BC38BDD5BE29B4CE3DA2495936
-        
+        thumbsUP = self.thumbsUP
         await self.originalMessage.edit(embed=self.messageEmbed)
-        
-        while(True):
-            if self.terminateFlag:
-                return
+        await self.originalMessage.add_reaction(thumbsUP)
+
+        while(True):      
+
+            # add users who are interested in joining the lobby to the users list
+            #cachedMessage = await self.originalMessage.channel.fetch_message(self.messageEmbed.id)
+            #reactors = await cachedMessage.reactions[0].users().flatten()
+
+            # for user in reactors:
+            #     if self.players.get(user.id,None) == None: # check if user is currently not in the steam ID list
+            #         # retreive steam ID and link their name/position to the lobby embed
+            #         steamID = self.accountLinks[user.id]
+            #         self.players[steamID] = [self.playerCount, user.name]
+            #         self.playerCount += 1            
 
             requestPackage = steamLobby.REQUEST_KEY + "steamids=" + str(self.players)
             response = requests.get(requestPackage)
             print(response)
             response = response.json()
-
-            # go through list of users and determine if their steamlobbyid matches with the id of this lobby
-            playerList = response['response']['players']
+            print(response)
+            playerList = response['players']
 
             for player in playerList:
                 steamid = player['steamid']
@@ -241,19 +285,28 @@ class steamLobby():
                 if lobbyID != self.lobbyID:
                     # user is not in the lobby
                     if steamid in self.players:
-                        # remove this player and shift other players down one position
-                        playerIndex = self.players[steamid]
-                        fieldList = self.messageEmbed.fields
+                        if len(self.players) > 1:
+                            # remove this player and shift other players down one position
+                            playerIndex = self.players[steamid][0]
 
-                        for index in range(playerIndex,len(fieldList), 1):
-                            shiftIndex = index + 1
-                            name = fieldList[shiftIndex].name
-                            value = fieldList[shiftIndex].value
-                            self.messageEmbed.insert_field_at(index,name=name,value=value,inline=False)
+                            for index in range(playerIndex,len(fieldList), 1):
+                                shiftIndex = index + 1
+                                name = fieldList[shiftIndex].name
+                                value = fieldList[shiftIndex].value
+                                self.messageEmbed.insert_field_at(index,name=name,value=value,inline=False)
 
-                        self.messageEmbed.remove_field(self.playerCount)
-                        self.playerCount -= 1
-
+                            self.messageEmbed.remove_field(self.playerCount)
+                            self.playerCount -= 1
+                        else:
+                            # was the last player, close the lobby
+                            print("close lobby")
+                            # TODO insert destructor commands after
+                            self.playerCount = 0
+                            self.messageEmbed.remove_field(1)
+                            self.messageEmbed.add_field(name="Lobby Status:", value="Closed", inline=True)
+                            #self.messageEmbed.insert_field_at(1,name="Lobby Closed!",value="",inline=True)
+                            await self.originalMessage.edit(embed=self.messageEmbed)
+                            return
                 else:
                     # user is in the lobby
                     if steamid not in self.players:
@@ -264,4 +317,15 @@ class steamLobby():
                         await message.edit(embed=self.messageEmbed)
                         self.playerCount += 1
 
-            await asyncio.sleep(15)
+            print(self.playerCount)
+
+            if self.playerCount == 0:
+                # no players remain, close lobby
+                return
+
+            await asyncio.sleep(15) # wait 15 seconds before updating again
+
+
+        def selectNewHost(self):
+            # if the host leaves the lobby and lobby remains open(I think some games allow this)
+            pass
