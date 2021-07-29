@@ -12,7 +12,8 @@ class MyClient(discord.Client):
     
     async def on_ready(self):
         print('Logged on as {0}!'.format(self.user))
-        
+        self.userID = self.user.id
+
         # prefix members
         self.prefix = "$OP "
         self.minecraftPrefix = "$OPCRAFT "
@@ -33,13 +34,11 @@ class MyClient(discord.Client):
         # clean up all handlers prior to exit
         for key in self.handlers: 
             self.handlers[key].cleanUp()
-        print("SOP going offline")
         await self.logout()
         
     async def on_message(self, message):
         handler = None
         command = None
-        print(str(message.author.id))
         # putting this here for now until I find a better place to put
         if message.content.startswith("`close") and str(message.author.id) == "140564870545408000":
             await self.startCleanUP()
@@ -74,19 +73,28 @@ class MyClient(discord.Client):
         """
 
         message = reaction.message
-        
+        print(user.name)
+        if user.id == self.userID:
+            # reaction is placed by bot
+            return
+
         # determine if the reaction is for a steam lobby
         lobbyHandler = self.handlers[self.lobbyPrefix]
         for steamLobbyID in lobbyHandler.lobbies:
+            print("adding reaction")
             steamLobby = lobbyHandler.lobbies[steamLobbyID]
             if steamLobby.getMessageID() == message.id:
                 # reaction is for a lobby handled
-                steamID = lobbyHandler.accountLinks.get(user.id,None)
+                print("check if correct lobby")
+                steamID = lobbyHandler.accountLinks.get(str(user.id),None)
                 if steamID == None:
                     # account is currently not linked, print so and remove reaction
-                    await reaction.remove_reaction(steamLobby.thumbsUP, user)
+                    await message.remove_reaction(steamLobby.thumbsUP, user)
                     await message.channel.send(user.mention + " your account is not linked!")
                 else:
+                    #if not steamLobby.addPlayer(steamID, user.name):
+                    #    await message.channel.send("Cant determine if you are in a lobby since your account isnt linked.")
+                    #  return
                     steamLobby.addPlayer(steamID, user.name)
 
     # CLIENT HELPER FUNCTIONS

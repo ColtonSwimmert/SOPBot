@@ -25,6 +25,7 @@ class SteamLobbyHandler():
             self.accountLinksFile = open("steamUsers.json", "r")
             self.accountLinks = json.load(self.accountLinksFile)
             self.accountLinksFile.close()
+            print(self.accountLinks)
 
         except (IOError,ValueError) as e:
 
@@ -69,17 +70,12 @@ class SteamLobbyHandler():
 
     async def createLobby(self, message):
         
-        # splitMessage = re.split("[/]+", message.content)
+        # check if this user already has a lobby open
 
-        # if splitMessage[0] != "steam:" and splitMessage[1] != "joinlobby":
-        #     # most likely an invalid lobby
-        #     await message.channel.send("Invalid Lobby URL")
-        #     return
-        
-        # appID = splitMessage[2]
 
         host = message.author
-        steamID = self.accountLinks[host.id]
+        hostID = str(host.id)
+        steamID = self.accountLinks[str(hostID)]
         profileResponse = requests.get(self.profileLookUp + str(steamID))
         if profileResponse.status_code != 200:
             # error
@@ -105,8 +101,9 @@ class SteamLobbyHandler():
         
         embeddedMessage = self.generateEmbedMessage(appID, host, lobbyLink)
         newMessage = await message.channel.send(embed=embeddedMessage)
-        self.lobbies[host.id] = steamLobby(host.id,host.name,appID,self.gamesList[appID]["Name"], newMessage, embeddedMessage, steamID, lobbyID, self)
-        await self.lobbies[host.id].updatePlayers()
+        
+        self.lobbies[hostID] = steamLobby(str(hostID),host.name,appID,self.gamesList[appID]["Name"], newMessage, embeddedMessage, steamID, lobbyID, self)
+        await self.lobbies[hostID].updatePlayers()
 
     async def embedLobby(self, message): # DONE
         # Dont track users in this lobby but make an embedded message for the lobby
@@ -163,21 +160,22 @@ class SteamLobbyHandler():
         self.gamesList[appID]["Images"] = []
         self.gamesList[appID]["Images"].append(iconResult)
 
+        print("current directory: " + os.getcwd())
+        print("checking if game exists already")
         # store game image inside respective folder, if game folder doesnt exist, then create it
-        gameDirectory = "../Games_Files/" + nameResult + "/"
-        print(str(os.path.isdir(gameDirectory)))
-        if not os.path.isdir(gameDirectory):
+        gameDirectory = "../Game_Files/" + nameResult + "/"
+        if os.path.isdir(gameDirectory) == False: # directory doesnt exist 
+            print("Creating directory for " + nameResult)
             os.mkdir(gameDirectory)
 
         gameIcon = requests.get(iconResult)
         if gameIcon.status_code == 200:
-            gameImage = open("gameIcon.jpg", "wb")
-            gameImage.write(gameIcon)
-
+            gameImage = open(gameDirectory + "gameIcon.jpg", "wb")
+            gameImage.write(gameIcon.content)
         return True
     
     async def addImage(self,message):
-        
+        pass
 
     async def linkAccount(self, message):
         # Retreive users steam account information and save
@@ -197,7 +195,7 @@ class SteamLobbyHandler():
         match = re.search("data-steamid64=\"\d+", url_response.text).group(0)
         steamID64 = match.split("\"")[1]
         # add steamID64 to json of users linked to the lobby system
-        self.accountLinks[message.author.id] = steamID64 
+        self.accountLinks[str(message.author.id)] = steamID64 
         await message.channel.send("Successful link!")
 
     async def displayOpenLobbies(self,message):
@@ -223,7 +221,7 @@ class steamLobby():
     TEST_STRING = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key=5355C4BC38BDD5BE29B4CE3DA2495936&format=json&steamids=76561198240844888,76561198051944687"
     
     def __init__(self, hostID, hostName, appID, gameName, messageID, embeddedMessage, steamID, lobbyID, lobbyHandler):
-        self.hostID = None
+        self.hostID = hostID
         self.hostName = hostName
         self.appID = None
         self.gameName = None
@@ -247,8 +245,9 @@ class steamLobby():
     
     def addPlayer(self, steamID, name):
         # add this player to the track list for this steam lobby
-        self.players[steamID] = [self.playerCount, name]
-        self.playerCount += 1
+
+        self.players[steamID] = [-1, name] # set to -1 for index
+        return True
 
     async def updatePlayers(self):
         # check status of players and ensure that they're in the lobby
@@ -259,7 +258,7 @@ class steamLobby():
         await self.originalMessage.add_reaction(thumbsUP)
 
         while(True):      
-
+            print("Updating " + self.hostName + "'s Lobby!")
             # add users who are interested in joining the lobby to the users list
             #cachedMessage = await self.originalMessage.channel.fetch_message(self.messageEmbed.id)
             #reactors = await cachedMessage.reactions[0].users().flatten()
@@ -271,24 +270,24 @@ class steamLobby():
             #         self.players[steamID] = [self.playerCount, user.name]
             #         self.playerCount += 1            
 
+            print("Tracking players " + str(self.players))
             requestPackage = steamLobby.REQUEST_KEY + "steamids=" + str(self.players)
             response = requests.get(requestPackage)
-            print(response)
             response = response.json()
-            print(response)
-            playerList = response['players']
+        
+            playerList = response['response']['players']
 
             for player in playerList:
                 steamid = player['steamid']
                 lobbyID = player.get('lobbysteamid',-1) # set to -1 if not in a lobby
 
-                if lobbyID != self.lobbyID:
+                if lobbyID != self.lobbyID and self.players[steamid][0] != -1:
                     # user is not in the lobby
                     if steamid in self.players:
                         if len(self.players) > 1:
                             # remove this player and shift other players down one position
                             playerIndex = self.players[steamid][0]
-
+                            fieldList = self.messageEmbed.fields
                             for index in range(playerIndex,len(fieldList), 1):
                                 shiftIndex = index + 1
                                 name = fieldList[shiftIndex].name
@@ -296,6 +295,7 @@ class steamLobby():
                                 self.messageEmbed.insert_field_at(index,name=name,value=value,inline=False)
 
                             self.messageEmbed.remove_field(self.playerCount)
+                            self.players[steamid][0] = -1
                             self.playerCount -= 1
                         else:
                             # was the last player, close the lobby
@@ -309,13 +309,13 @@ class steamLobby():
                             return
                 else:
                     # user is in the lobby
-                    if steamid not in self.players:
+                    if self.players[steamid][0] == -1:
                         # add them to the list, otherwise ignore
-                        name = player['personname']
                         self.players[steamid] = [self.playerCount, name] # set their index and their name
                         self.messageEmbed.add_field(name="Player#" + str(playerCount + 1), value = name)
                         await message.edit(embed=self.messageEmbed)
                         self.playerCount += 1
+                    
 
             print(self.playerCount)
 

@@ -281,7 +281,6 @@ class discordReactions(discordUserEvents):
     Additional: Image modifications, distortions, gray scales, etc
     '''
 
-
     def __init__(self): # load reaction images from reaction directory
         self.imagePath = "../Event_Files/"
         self.reactions = {}
@@ -294,20 +293,14 @@ class discordReactions(discordUserEvents):
         super().__init__()
         
     async def postReaction(self,message): 
-        
         reactionName = message.content
-        
         # if in reaction list then post
         if discordUserEvents.EventInfo.get(reactionName,None) != None:
-            
             fileEXT = discordUserEvents.EventInfo[reactionName]["extension"]
-
             if fileEXT == ".mp3":
                 return
-
             myFile = discord.File(self.imagePath + fileEXT + "/" + reactionName + "." + fileEXT,filename=reactionName + "." + fileEXT)
             await message.channel.send(file=myFile)
-        
         return
         
         
@@ -411,6 +404,7 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
             "removeclip" : self.removeClip,
             "skip" : self.skip,
             "changename" : self.changeName,
+            "source" : self.source,
         }
 
         super().__init__()
@@ -421,19 +415,16 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
         if discordUserEvents.EventInfo.get(message.content,None) == None:
             return
 
-
         # append clip, return if already playing
         self.queue.append(message.content) # add to queue
         if self.soundPlaying:     
             return
-
 
         # determine if user is in a channel
         channel = message.author.voice
         if channel == None:
             await message.channel.send("You are not in a voice channel!")
             return
-
 
         # connect and start playing 
         self.currentVoice = await channel.channel.connect()
@@ -476,6 +467,23 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
         self.currentVoice = None
         self.soundPlaying = False
         self.queue.clear()
+    
+    async def source(self,message):
+        # display the source of the sound clip.
+        # if source is only part of video then show the start and end time
+        content = message.content.rstrip()
+
+        if discordUserEvents.EventInfo.get(content, None) == None:
+            # event does not exist
+            await message.channel.send("Event does not exist.")
+            return
+
+        source = discordUserEvents.EventInfo[content].get("source", None) 
+        if source == None:
+            await message.channel.send("Source is not provided")
+            return
+
+        await message.channel.send(source)
 
     async def stopSound(self,message):
         
