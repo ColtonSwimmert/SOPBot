@@ -73,7 +73,6 @@ class MyClient(discord.Client):
         """
 
         message = reaction.message
-        print(user.name)
         if user.id == self.userID:
             # reaction is placed by bot
             return
@@ -81,20 +80,15 @@ class MyClient(discord.Client):
         # determine if the reaction is for a steam lobby
         lobbyHandler = self.handlers[self.lobbyPrefix]
         for steamLobbyID in lobbyHandler.lobbies:
-            print("adding reaction")
             steamLobby = lobbyHandler.lobbies[steamLobbyID]
             if steamLobby.getMessageID() == message.id:
                 # reaction is for a lobby handled
-                print("check if correct lobby")
                 steamID = lobbyHandler.accountLinks.get(str(user.id),None)
                 if steamID == None:
                     # account is currently not linked, print so and remove reaction
                     await message.remove_reaction(steamLobby.thumbsUP, user)
                     await message.channel.send(user.mention + " your account is not linked!")
                 else:
-                    #if not steamLobby.addPlayer(steamID, user.name):
-                    #    await message.channel.send("Cant determine if you are in a lobby since your account isnt linked.")
-                    #  return
                     steamLobby.addPlayer(steamID, user.name)
 
     # CLIENT HELPER FUNCTIONS

@@ -25,7 +25,6 @@ class SteamLobbyHandler():
             self.accountLinksFile = open("steamUsers.json", "r")
             self.accountLinks = json.load(self.accountLinksFile)
             self.accountLinksFile.close()
-            print(self.accountLinks)
 
         except (IOError,ValueError) as e:
 
@@ -44,6 +43,7 @@ class SteamLobbyHandler():
         # Handler commands
         self.commands = {
             "lobby" : self.createLobby,
+            "host" : self.hostLobby,
             "embed" : self.embedLobby,
             "openlobbies" : self.displayOpenLobbies,
             "link" : self.linkAccount
@@ -68,10 +68,74 @@ class SteamLobbyHandler():
         json.dump(self.gamesList,steamGamesFile,indent=4)
         steamGamesFile.close()
 
+    async def retreiveGameDetails(self,steamID):
+        profileResponse = requests.get(self.profileLookUp + str(steamID))
+        if profileResponse.status_code != 200:
+            # error
+            return
+
+        # parse for game join link
+        lobbyLink = re.search("steam://joinlobby(.*)\" ",profileResponse.text).group(0).rstrip("\" ")
+        if lobbyLink != None:
+            lobbyLink = lobbyLink.rstrip("\"")
+        else:
+            await message.channel.send("Error getting link")
+            return
+
+        appID = re.split("[/]+", lobbyLink)[2]
+        lobbyID = re.split("[/]+", lobbyLink)[3]
+
+        # check if games data is already stored
+        if self.gamesList.get(appID,None) == None:
+            if not self.addGame(appID):
+                await message.channel.send("Error id")
+                return
+
     async def createLobby(self, message):
+
+        host = message.author
+        hostID = str(host.id)
+        
+        # retreive user from steam links
+        steamID = self.accountLinks.get(hostID,None)
+        if steamID == None:
+            await message.channel.send(host.mention + " Your account is not linked! Use !link <steam url> to link your account.")
+            return
+
+        profileResponse = requests.get(self.profileLookUp + str(steamID))
+        if profileResponse.status_code != 200:
+            # error
+            await message.channel.send(host.mention + " Unable to retreive lobby information.")
+            return
+
+        # parse for game join link
+        lobbyLink = re.search("steam://joinlobby(.*)\" ",profileResponse.text)
+        if lobbyLink != None:
+            # need to update later
+            lobbyLink = lobbyLink.group(0).rstrip("\" ")
+            lobbyLink = lobbyLink.rstrip("\"")
+        else:
+            await message.channel.send(host.mention + " Could not retreive lobby, ensure that the lobby is joinable or you are not set to private.")
+            return
+        
+        # retreive appID
+        appID = re.split("[/]+", lobbyLink)[2]
+
+        # check if games data is already stored
+        game = self.gamesList.get(appID,None)
+        if game == None:
+            if not self.addGame(appID):
+                print("Unable to add game data to SOPBot")
+                return
+        
+        #lobbyMessage = host.name + "'s " + game["Name"] + " lobby: " + lobbyLink
+        embeddedMessage = self.generateEmbedMessage(appID, host, lobbyLink)
+        await message.channel.send(embed=embeddedMessage)
+
+
+    async def hostLobby(self, message):
         
         # check if this user already has a lobby open
-
 
         host = message.author
         hostID = str(host.id)
@@ -122,7 +186,7 @@ class SteamLobbyHandler():
         # check if games data is already stored
         if self.gamesList.get(appID,None) == None:
             if not self.addGame(appID):
-                await message.channel.send("Error")
+                print("Unable to add game data to SOPBot")
                 return
 
         embeddedMessage = self.generateEmbedMessage(appID, host, message.content)
@@ -160,8 +224,6 @@ class SteamLobbyHandler():
         self.gamesList[appID]["Images"] = []
         self.gamesList[appID]["Images"].append(iconResult)
 
-        print("current directory: " + os.getcwd())
-        print("checking if game exists already")
         # store game image inside respective folder, if game folder doesnt exist, then create it
         gameDirectory = "../Game_Files/" + nameResult + "/"
         if os.path.isdir(gameDirectory) == False: # directory doesnt exist 
