@@ -166,7 +166,7 @@ class discordUserEvents():
         if os.path.exists(filePath):
             os.remove(filePath)
         else:
-            print("Error, file doesnt exist.b")
+            print("Error, file doesnt exist.")
         
         discordUserEvents.EventInfo.pop(fileName)
         
@@ -194,7 +194,6 @@ class discordUserEvents():
         if not os.path.isdir("../Event_Files/" + fileEXT):
             # if this directory doesnt exist then make it
             os.mkdir("../Event_Files/" + fileEXT)
-
 
     @staticmethod
     async def aboutEvent(message):
@@ -328,7 +327,6 @@ class discordReactions(discordUserEvents):
             await message.channel.send("Missing reaction name.")
             return
         
-        
         fileName = messageContent[0]
         
         # format for data[fileName, fileEXT, AuthorID, AuthorName, date]
@@ -438,7 +436,7 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
             for sound in self.queue:
 
                 timerIndex = 0
-                soundName = sound.lower().lstrip("!")
+                soundName = sound.lower()
 
                 #for clip in self.queue:
                 soundFile = self.mp3Path + soundName + ".mp3"
@@ -581,8 +579,12 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
     
     async def removeClip(self,message):
 
-        if not self.isAuthor(message):
-            await asyncio.sleep(0)
+        if not self.isAuthor(message.author.id):
+            await message.channel.send("You are not the author of this event!")
+            return
+        
+        if message.content.rstrip() in self.queue:
+            await message.channel.send("Cannot remove a clip that is currently being played!")
             return
 
         self.removeEventINFO(message.content)
@@ -595,7 +597,7 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
             await super().changeName(message)
         
         else:
-            message.channel.send("Cannot sound clips while currently playing sounds")
+            await message.channel.send("Cannot sound clips while currently playing sounds")
 
 
     def formatClipTime(self,providedTime):
@@ -655,7 +657,6 @@ class discordChat(): # handler for chat related functions
         pass
 
     def cleanUp(self):
-
         del self.timeoutList # clear timeout list
 
     async def cleanChat(self, message):

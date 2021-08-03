@@ -46,7 +46,10 @@ class SteamLobbyHandler():
             "host" : self.hostLobby,
             "embed" : self.embedLobby,
             "openlobbies" : self.displayOpenLobbies,
-            "link" : self.linkAccount
+            "link" : self.linkAccount,
+            "close" : self.closeLobby,
+            "note" : self.addNote,
+            "image" : self.addImage
         }
 
         # helper vars
@@ -130,6 +133,8 @@ class SteamLobbyHandler():
         
         #lobbyMessage = host.name + "'s " + game["Name"] + " lobby: " + lobbyLink
         embeddedMessage = self.generateEmbedMessage(appID, host, lobbyLink)
+        #imageFile = discord.File("asuka.png", filename=".png")
+        #embeddedMessage.set_image(url="attachment://asuka.png")
         await message.channel.send(embed=embeddedMessage)
 
 
@@ -139,6 +144,16 @@ class SteamLobbyHandler():
 
         host = message.author
         hostID = str(host.id)
+        lobby = self.lobbies.get(hostID,None)
+        if lobby != None:
+            if lobby.imageName == None:
+                await lobby.originalMessage.channel.send(embed=lobby.messageEmbed) 
+            else:
+                imageFile = discord.File(lobby.imageName, filename=lobby.imageName)
+                lobby.messageEmbed.set_image(url="attachment://" + lobby.imageName)
+                await lobby.originalMessage.channel.send(file=imageFile,embed=lobby.messageEmbed)
+            return
+
         steamID = self.accountLinks[str(hostID)]
         profileResponse = requests.get(self.profileLookUp + str(steamID))
         if profileResponse.status_code != 200:
@@ -164,9 +179,10 @@ class SteamLobbyHandler():
                 return
         
         embeddedMessage = self.generateEmbedMessage(appID, host, lobbyLink)
+        #embeddedMessage.add_field(name="Player", value="Count", inline=True) # unique to embedLobby
         newMessage = await message.channel.send(embed=embeddedMessage)
         
-        self.lobbies[hostID] = steamLobby(str(hostID),host.name,appID,self.gamesList[appID]["Name"], newMessage, embeddedMessage, steamID, lobbyID, self)
+        self.lobbies[hostID] = steamLobby(str(hostID),host.display_name,appID,self.gamesList[appID]["Name"], newMessage, embeddedMessage, steamID, lobbyID, self)
         await self.lobbies[hostID].updatePlayers()
 
     async def embedLobby(self, message): # DONE
@@ -194,10 +210,16 @@ class SteamLobbyHandler():
 
     def generateEmbedMessage(self, appID, host, lobbyLink): #DONE exception of updates
         game = self.gamesList[appID]
-        embeddedMessage = discord.Embed(title = game["Name"])
+        # VERSION 1
+        # embeddedMessage = discord.Embed(title = game["Name"] + " lobby")
+        # embeddedMessage.set_thumbnail(url=str(game["Images"][0]))
+        # embeddedMessage.set_author(name= host.name + "'s", icon_url=host.avatar_url)
+        # embeddedMessage.add_field(name="Link: ", value=lobbyLink, inline=True)
+        
+        # VERSION 2
+        embeddedMessage = discord.Embed(title=lobbyLink)
         embeddedMessage.set_thumbnail(url=str(game["Images"][0]))
-        embeddedMessage.set_author(name= host.name + "'s Lobby", icon_url=host.avatar_url)
-        embeddedMessage.add_field(name="Lobby Link", value=lobbyLink, inline=False)
+        embeddedMessage.set_author(name=host.display_name + "'s " + game["Name"] + " lobby", icon_url=host.avatar_url)
         return embeddedMessage
 
     def addGame(self,appID): #DONE
@@ -235,9 +257,6 @@ class SteamLobbyHandler():
             gameImage = open(gameDirectory + "gameIcon.jpg", "wb")
             gameImage.write(gameIcon.content)
         return True
-    
-    async def addImage(self,message):
-        pass
 
     async def linkAccount(self, message):
         # Retreive users steam account information and save
@@ -256,14 +275,27 @@ class SteamLobbyHandler():
 
         match = re.search("data-steamid64=\"\d+", url_response.text).group(0)
         steamID64 = match.split("\"")[1]
+        authorID = str(message.author.id)
+
+        # verify that the account hasnt been used yet
+        for discordUser in self.accountLinks:
+            if authorID == discordUser:
+                await message.channel.send("Your Discord account is already linked to a steam account.")
+                return
+            elif steamID64 == self.accountLinks[discordUser]:
+                discordUser = await self.client.fetch_user(int(authorID))
+                await message.channel.send("Provided Steam account is already linked to " + discordUser.display_name)
+                return
+
+
         # add steamID64 to json of users linked to the lobby system
-        self.accountLinks[str(message.author.id)] = steamID64 
+        self.accountLinks[authorID] = steamID64 
         await message.channel.send("Successful link!")
 
     async def displayOpenLobbies(self,message):
         lobbyEmbed = discord.Embed(title = "Open Lobbies")
-        lobbyEmbed.thumbnail(url="attachment://steamicon.png")
-        lobbyEmbed.set_footer(text=str(len(self.lobbies)))
+        #lobbyEmbed.thumbnail(url="attachment://steamicon.png")
+        lobbyEmbed.set_footer(text="Currently: " + str(len(self.lobbies)) + " are open")
         for lobby in self.lobbies:
             gameName = "***" + self.lobbies[lobby].gameName + "***  "
             hostName = "Host: " + self.lobbies[lobby].hostName
@@ -271,10 +303,42 @@ class SteamLobbyHandler():
 
         await message.channel.send(embed=lobbyEmbed)
 
-    def closeLobby(self, message):
+    async def closeLobby(self, message):
         # delete lobby from list
-        pass
+        
+        authorID = str(message.author.id)
+        lobby = self.lobbies.get(authorID, None)
+        if lobby == None:
+            await message.channel.send("No hosted lobby being tracked by SOPBot!")
+            return
 
+        await lobby.closeLobby()  
+        del lobby
+        self.lobbies.pop(authorID)
+
+    async def addNote(self, message):
+        # add a footer to the lobby 
+
+        authorID = str(message.author.id)
+        lobby = self.lobbies.get(authorID, None)
+        if lobby == None:
+            await message.channel.send("No hosted lobby being tracked by SOPBot!")
+            return
+
+        lobby.messageEmbed.set_footer(text=message.content)
+        await lobby.originalMessage.edit(embed=lobby.messageEmbed)
+
+    async def addImage(self,message):
+        authorID = str(message.author.id)
+        lobby = self.lobbies.get(authorID, None)
+        if lobby == None:
+            await message.channel.send("No hosted lobby being tracked by SOPBot!")
+            return
+
+        lobby.imageName = "asuka.png"
+        imageFile = discord.File(lobby.imageName, filename=lobby.imageName)
+        lobby.messageEmbed.set_image(url="attachment://" + lobby.imageName)
+        await lobby.originalMessage.channel.send(file=imageFile,embed=lobby.messageEmbed)
 
 
 class steamLobby():
@@ -286,7 +350,7 @@ class steamLobby():
         self.hostID = hostID
         self.hostName = hostName
         self.appID = None
-        self.gameName = None
+        self.gameName = gameName
         self.players = {}
         self.originalMessage = messageID
         self.lobbyID = lobbyID
@@ -298,6 +362,7 @@ class steamLobby():
         self.players[steamID] = [0, self.hostName] # format lobby position, name
         self.lobbyHandler = lobbyHandler
         self.thumbsUP = "👍"
+        self.imageName = None
 
     def cleanUp():
         self.terminateFlag = True
@@ -307,7 +372,6 @@ class steamLobby():
     
     def addPlayer(self, steamID, name):
         # add this player to the track list for this steam lobby
-
         self.players[steamID] = [-1, name] # set to -1 for index
         return True
 
@@ -319,8 +383,7 @@ class steamLobby():
         await self.originalMessage.edit(embed=self.messageEmbed)
         await self.originalMessage.add_reaction(thumbsUP)
 
-        while(True):      
-            print("Updating " + self.hostName + "'s Lobby!")
+        while(self.playerCount > 0):      
             # add users who are interested in joining the lobby to the users list
             #cachedMessage = await self.originalMessage.channel.fetch_message(self.messageEmbed.id)
             #reactors = await cachedMessage.reactions[0].users().flatten()
@@ -332,7 +395,6 @@ class steamLobby():
             #         self.players[steamID] = [self.playerCount, user.name]
             #         self.playerCount += 1            
 
-            print("Tracking players " + str(self.players))
             requestPackage = steamLobby.REQUEST_KEY + "steamids=" + str(self.players)
             response = requests.get(requestPackage)
             response = response.json()
@@ -343,7 +405,9 @@ class steamLobby():
                 steamid = player['steamid']
                 lobbyID = player.get('lobbysteamid',-1) # set to -1 if not in a lobby
 
-                if lobbyID != self.lobbyID and self.players[steamid][0] != -1:
+                if str(lobbyID) != self.lobbyID and self.players[steamid][0] != -1:
+                    print(lobbyID)
+                    print(self.lobbyID)
                     # user is not in the lobby
                     if steamid in self.players:
                         if len(self.players) > 1:
@@ -360,14 +424,9 @@ class steamLobby():
                             self.players[steamid][0] = -1
                             self.playerCount -= 1
                         else:
-                            # was the last player, close the lobby
-                            print("close lobby")
-                            # TODO insert destructor commands after
+                            print("Closing " + self.hostName + "'s lobby.")
                             self.playerCount = 0
-                            self.messageEmbed.remove_field(1)
-                            self.messageEmbed.add_field(name="Lobby Status:", value="Closed", inline=True)
-                            #self.messageEmbed.insert_field_at(1,name="Lobby Closed!",value="",inline=True)
-                            await self.originalMessage.edit(embed=self.messageEmbed)
+                            await self.closeLobby()
                             return
                 else:
                     # user is in the lobby
@@ -377,17 +436,15 @@ class steamLobby():
                         self.messageEmbed.add_field(name="Player#" + str(playerCount + 1), value = name)
                         await message.edit(embed=self.messageEmbed)
                         self.playerCount += 1
-                    
-
-            print(self.playerCount)
-
-            if self.playerCount == 0:
-                # no players remain, close lobby
-                return
 
             await asyncio.sleep(15) # wait 15 seconds before updating again
 
+    async def closeLobby(self):
+        self.playerCount = 0
+        self.messageEmbed.clear_fields() # remove all players from the lobby
+        self.messageEmbed.add_field(name="Lobby Status:", value="Closed", inline=True)
+        await self.originalMessage.edit(embed=self.messageEmbed)
 
-        def selectNewHost(self):
-            # if the host leaves the lobby and lobby remains open(I think some games allow this)
-            pass
+    def selectNewHost(self):
+         # if the host leaves the lobby and lobby remains open(I think some games allow this)
+        pass  

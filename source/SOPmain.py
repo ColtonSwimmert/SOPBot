@@ -40,7 +40,8 @@ class MyClient(discord.Client):
         handler = None
         command = None
         # putting this here for now until I find a better place to put
-        if message.content.startswith("`close") and str(message.author.id) == "140564870545408000":
+        # and str(message.author.id) == "140564870545408000"
+        if message.content.startswith("`close"):
             await self.startCleanUP()
             return
 
@@ -48,7 +49,8 @@ class MyClient(discord.Client):
         for key in self.handlers:
             if message.content.startswith(key): 
                 # command found
-                message.content = message.content.replace(key, "")              
+                #message.content = message.content.replace(key, "")   
+                message.content = message.content.lstrip(key)           
                 handler = self.handlers[key]
                 command = self.getCommand(message.content)
                 break 
@@ -59,7 +61,9 @@ class MyClient(discord.Client):
 
         # send command
         if handler.commands.get(command,None) != None: # attempt to lookup function
-            message.content = message.content.replace(command + " ", "")
+            #message.content = message.content.replace(command + " ", "")
+            message.content = message.content.lstrip(command).lstrip() # strip command and any left over whitespace
+            print(message.content)
             await handler.commands[command](message)
         elif handler.commands.get("",None) != None: 
             await handler.commands[""](message) # run default function
