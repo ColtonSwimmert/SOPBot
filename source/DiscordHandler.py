@@ -375,9 +375,14 @@ class discordReactions(discordUserEvents):
         
         else:
             response = "You are not the author!"
-        
-        
         await message.channel.send(response)
+    
+    def retrieveFilePath(self,name):
+        image = discordUserEvents.EventInfo.get(name,None)
+        if image == None or image["extension"][0:2] == "mp":
+            # return none if doesnt exist or is an mp3/4 file
+            return None , None
+        return self.imagePath + image["extension"] + "/" + name + "." + image["extension"], name + "." + image["extension"]
             
         
 class discordSoundBoard(discordUserEvents): #bot will join and play the sound clip available
