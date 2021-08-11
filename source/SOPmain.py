@@ -63,7 +63,6 @@ class MyClient(discord.Client):
         if handler.commands.get(command,None) != None: # attempt to lookup function
             #message.content = message.content.replace(command + " ", "")
             message.content = message.content.lstrip(command).lstrip() # strip command and any left over whitespace
-            print(message.content)
             await handler.commands[command](message)
         elif handler.commands.get("",None) != None: 
             await handler.commands[""](message) # run default function
@@ -86,15 +85,13 @@ class MyClient(discord.Client):
         for steamLobbyID in lobbyHandler.lobbies:
             steamLobby = lobbyHandler.lobbies[steamLobbyID]
             if steamLobby.getMessageID() == message.id:
-                # reaction is for a lobby handled
                 steamID = lobbyHandler.accountLinks.get(str(user.id),None)
                 if steamID == None:
-                    # account is currently not linked, print so and remove reaction
                     await message.remove_reaction(steamLobby.thumbsUP, user)
                     await message.channel.send(user.mention + " your account is not linked!")
-                else:
+                elif steamLobby.players.get(steamID, 0) == 0:
                     steamLobby.addPlayer(steamID, user.name)
-
+                
     # CLIENT HELPER FUNCTIONS
     def getCommand(self,content): # obtain the command string 
         commandString = ""

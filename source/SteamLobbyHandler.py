@@ -58,6 +58,7 @@ class SteamLobbyHandler():
         self.lookUpUrl = "https://steamid.io/lookup/"
         self.profileLookUp = "http://steamcommunity.com/profiles/"
         self.lobbies = {} #key creatorID, value steamLobby Class
+        self.thumbsUP = "👍"
 
     def cleanUp(self):
         # dump newly acquired information to json files
@@ -146,12 +147,25 @@ class SteamLobbyHandler():
         hostID = str(host.id)
         lobby = self.lobbies.get(hostID,None)
         if lobby != None:
+            # this needs refactoring but currently works fine
             if lobby.imageName == None:
-                await lobby.originalMessage.channel.send(embed=lobby.messageEmbed) 
+                tempPointer = await lobby.originalMessage.channel.send(embed=lobby.messageEmbed) 
+                await lobby.originalMessage.clear_reactions()
+                await tempPointer.add_reaction(self.thumbsUP)
+                lobby.originalMessage = tempPointer
+            elif lobby.imagePath == None and lobby.imageName != None:
+                tempPointer = await lobby.originalMessage.channel.send(embed=lobby.messageEmbed)
+                await lobby.originalMessage.clear_reactions()
+                await tempPointer.add_reaction(self.thumbsUP)
+                lobby.originalMessage = tempPointer
             else:
+                # include display image and resend lobby embed
                 imageFile = discord.File(lobby.imagePath, filename=lobby.imageName)
                 lobby.messageEmbed.set_image(url="attachment://" + lobby.imageName)
-                await lobby.originalMessage.channel.send(file=imageFile,embed=lobby.messageEmbed)
+                tempPointer = await lobby.originalMessage.channel.send(file=imageFile,embed=lobby.messageEmbed)
+                await lobby.originalMessage.clear_reactions()
+                await tempPointer.add_reaction(self.thumbsUP)
+                lobby.originalMessage = tempPointer
             return
 
         steamID = self.accountLinks.get(str(hostID), None)
@@ -166,11 +180,12 @@ class SteamLobbyHandler():
             return
 
         # parse for game join link
-        lobbyLink = re.search("steam://joinlobby(.*)\" ",profileResponse.text).group(0).rstrip("\" ")
+        lobbyLink = re.search("steam://joinlobby(.*)\" ",profileResponse.text)
         if lobbyLink != None:
+            lobbyLink = lobbyLink.group(0).rstrip("\" ")
             lobbyLink = lobbyLink.rstrip("\"")
         else:
-            await message.channel.send("Error getting link")
+            await message.channel.send("Error retreiving link. Ensure that your account is not private and you are in a joinable lobby!")
             return
 
         appID = re.split("[/]+", lobbyLink)[2]
@@ -188,6 +203,7 @@ class SteamLobbyHandler():
         
         self.lobbies[hostID] = steamLobby(str(hostID),host.display_name,appID,self.gamesList[appID]["Name"], newMessage, embeddedMessage, steamID, lobbyID, self)
         await self.lobbies[hostID].updatePlayers()
+        
 
     async def embedLobby(self, message): # DONE
         # Dont track users in this lobby but make an embedded message for the lobby
@@ -339,15 +355,31 @@ class SteamLobbyHandler():
             await message.channel.send("No hosted lobby being tracked by SOPBot!")
             return
 
-        lobby.imagePath, lobby.imageName = self.client.handlers["~"].retrieveFilePath(message.content) 
-        if lobby.imageName == None:
-            await message.channel.send("Image does not exist!")
-            return
+        if requests.get(message.content).status_code == 200:
+            lobby.imageName = message.content
+            lobby.imagePath = None
+            lobby.messageEmbed.set_image(url=message.content)
+            tempPointer = await lobby.originalMessage.channel.send(embed=lobby.messageEmbed)
 
-        imageFile = discord.File(lobby.imagePath, filename=lobby.imageName)
-        lobby.messageEmbed.set_image(url="attachment://" + lobby.imageName)
-        await lobby.originalMessage.channel.send(file=imageFile,embed=lobby.messageEmbed)
+            # reset message with reactions 
+            await lobby.originalMessage.clear_reactions()
+            await tempPointer.add_reaction(self.thumbsUP)
+            lobby.originalMessage = tempPointer
 
+        else:
+            lobby.imagePath, lobby.imageName = self.client.handlers["~"].retrieveFilePath(message.content) 
+            if lobby.imageName == None:
+                await message.channel.send("Not a valid image!")
+                return
+
+            imageFile = discord.File(lobby.imagePath, filename=lobby.imageName)
+            lobby.messageEmbed.set_image(url="attachment://" + lobby.imageName)
+            tempPointer = await lobby.originalMessage.channel.send(file=imageFile,embed=lobby.messageEmbed)
+
+            # reset message with reactions 
+            await lobby.originalMessage.clear_reactions()
+            await tempPointer.add_reaction(self.thumbsUP)
+            lobby.originalMessage = tempPointer
 
 class steamLobby():
     # Handle updating players and retreiving if lobby is still open
@@ -399,15 +431,18 @@ class steamLobby():
             response = response.json()
         
             playerList = response['response']['players']
+            
+            print("Players Count: " + str(self.playerCount))
+            print("Players watching " + str(len(self.players)))
 
             for player in playerList:
                 steamid = player['steamid']
-                lobbyID = player.get('lobbysteamid',-1) # set to -1 if not in a lobby
-
-                if str(lobbyID) != self.lobbyID and self.players[steamid][0] != -1:
-                    # user is not in the lobby
+                lobbyID = str(player.get('lobbysteamid',-1)) # set to -1 if not in a lobby
+                
+                if lobbyID != self.lobbyID and self.players[steamid][0] != -1:
+                    # user is not in the lobbylobbyID
                     if steamid in self.players:
-                        if len(self.players) > 1:
+                        if self.playerCount > 1:
                             # remove this player and shift other players down one position
                             playerIndex = self.players[steamid][0]
                             fieldList = self.messageEmbed.fields
@@ -427,10 +462,11 @@ class steamLobby():
                             return
                 else:
                     # user is in the lobby
-                    if self.players[steamid][0] == -1:
+                    if lobbyID == self.lobbyID and self.players[steamid][0] == -1:
+                        print("updating player position")
                         # add them to the list, otherwise ignore
-                        self.players[steamid] = [self.playerCount, name] # set their index and their name
-                        self.messageEmbed.add_field(name="Player#" + str(playerCount + 1), value = name)
+                        self.players[steamid][0] = self.playerCount # set their index and their name
+                        self.messageEmbed.add_field(name="Player#" + str(self.playerCount + 1), value = self.players[steamid][1])
                         await message.edit(embed=self.messageEmbed)
                         self.playerCount += 1
 
