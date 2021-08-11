@@ -449,9 +449,7 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
                 # check if file exists, if not then it was probably removed by host so remove it from event list
                 if not os.path.isfile(soundFile): 
                     await message.channel.send(soundName + " not found!")
-                    self.removeEventINFO(soundName) # remove from listing
                     continue
-
 
                 self.currentVoice.play(discord.FFmpegPCMAudio(soundFile))
 
@@ -459,7 +457,6 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
                     await asyncio.sleep(1)
                     if self.soundPlaying == False:
                         return
-
 
             self.queue.clear() 
             await asyncio.sleep(1)
