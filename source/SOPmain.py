@@ -49,7 +49,7 @@ class MyClient(discord.Client):
         for key in self.handlers:
             if message.content.startswith(key): 
                 # command found
-                #message.content = message.content.replace(key, "")   
+                
                 message.content = message.content.lstrip(key)           
                 handler = self.handlers[key]
                 command = self.getCommand(message.content)

@@ -302,7 +302,6 @@ class discordReactions(discordUserEvents):
             await message.channel.send(file=myFile)
         return
         
-        
     async def addReaction(self, message):
         
         # ensure there is an attachment 
@@ -655,7 +654,7 @@ class discordChat(): # handler for chat related functions
         except IOError:
             print("Error loading command usage file. Renamed or does not exist?")
 
-    def default(self):
+    def default(self, message):
         pass
 
     def cleanUp(self):
