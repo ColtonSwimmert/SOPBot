@@ -9,7 +9,6 @@ import asyncio
 import json
 import youtube_dl
 
-
 # HELPER FUNCTIONS
 
 def contentSplit(string,splitCount=1):
@@ -212,8 +211,10 @@ class discordUserEvents():
         eventOutput += "AuthorName: " + eventDict["AuthorName"] + "\n"
         eventOutput += "AuthorID: " + str(eventDict["AuthorID"]) + "\n"
         eventOutput += "Date: " + eventDict["date"] + "\n"
+        source = eventDict.get("source", -1)
+        if  source != -1:
+            eventOutput += "Source: " + source + "\n"
         eventOutput += "```"
-
         await message.channel.send(eventOutput)
 
 
@@ -296,7 +297,7 @@ class discordReactions(discordUserEvents):
         # if in reaction list then post
         if discordUserEvents.EventInfo.get(reactionName,None) != None:
             fileEXT = discordUserEvents.EventInfo[reactionName]["extension"]
-            if fileEXT == ".mp3":
+            if fileEXT == "mp3":
                 return
             myFile = discord.File(self.imagePath + fileEXT + "/" + reactionName + "." + fileEXT,filename=reactionName + "." + fileEXT)
             await message.channel.send(file=myFile)
@@ -313,10 +314,8 @@ class discordReactions(discordUserEvents):
         eventAttachment = message.attachments[0]
         fileEXT = eventAttachment.filename.split(".")[1]
         
-        
         # obtain fileName and EXT
         messageContent = message.content.split()
-        
         
         # make sure that we are getting the filename
         contentLength = len(messageContent)
@@ -550,10 +549,8 @@ class discordSoundBoard(discordUserEvents): #bot will join and play the sound cl
         eventInfo.append(content[0]) # add link to source material
         self.addEventINFO(eventInfo)
 
-
         # move mp3 to correct directory
-        fullName = originalName + ".mp3"
-        
+        fullName = originalName + ".mp3"        
 
         # determine if giving a clip range
         try:

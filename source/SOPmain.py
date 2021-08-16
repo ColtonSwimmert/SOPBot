@@ -8,12 +8,15 @@ from DiscordHandler import *
 from SteamLobbyHandler import *
 
 
+# timing import to test general runtime of functions for imrpovements
+import timeit
+
 class MyClient(discord.Client):
     
-    async def on_ready(self):
-        print('Logged on as {0}!'.format(self.user))
-        self.userID = self.user.id
-
+    def __init__(self):
+        
+        super().__init__()
+        
         # prefix members
         self.prefix = "$OP "
         self.minecraftPrefix = "$OPCRAFT "
@@ -30,6 +33,13 @@ class MyClient(discord.Client):
              self.lobbyPrefix : SteamLobbyHandler(self)
             }
 
+        self.firstTimeSetup()
+
+
+    async def on_ready(self):
+        print('Logged on as {0}!'.format(self.user))
+        self.userID = self.user.id
+
     async def startCleanUP(self):
         # clean up all handlers prior to exit
         for key in self.handlers: 
@@ -39,12 +49,12 @@ class MyClient(discord.Client):
     async def on_message(self, message):
         handler = None
         command = None
-        # putting this here for now until I find a better place to put
-        # and str(message.author.id) == "140564870545408000"
+        
         if message.content.startswith("`close"):
             await self.startCleanUP()
             return
 
+        
         # parse a command and send to proper handler
         for key in self.handlers:
             if message.content.startswith(key): 
@@ -58,10 +68,9 @@ class MyClient(discord.Client):
         if command == None: # if no command, do nothing
             await asyncio.sleep(0)
             return
-
+        
         # send command
         if handler.commands.get(command,None) != None: # attempt to lookup function
-            #message.content = message.content.replace(command + " ", "")
             message.content = message.content.lstrip(command).lstrip() # strip command and any left over whitespace
             await handler.commands[command](message)
         elif handler.commands.get("",None) != None: 
@@ -74,7 +83,6 @@ class MyClient(discord.Client):
         When a reaction is added, follow pipeline for handling reaction
         currently only pass to LobbyHandler
         """
-
         message = reaction.message
         if user.id == self.userID:
             # reaction is placed by bot
@@ -90,8 +98,8 @@ class MyClient(discord.Client):
                     await message.remove_reaction(steamLobby.thumbsUP, user)
                     await message.channel.send(user.mention + " your account is not linked!")
                 elif steamLobby.players.get(steamID, 0) == 0:
-                    steamLobby.addPlayer(steamID, user.name)
-                
+                    steamLobby.addPlayer(steamID, user.display_name)
+
     # CLIENT HELPER FUNCTIONS
     def getCommand(self,content): # obtain the command string 
         commandString = ""
@@ -100,6 +108,19 @@ class MyClient(discord.Client):
                 break
             commandString += char
         return commandString
+
+
+    def firstTimeSetup(self):
+        # check if these directories exist, if not then create them prior to running SOP
+        curDir = os.getcwd()
+        directories = ["Event_Files", "Game_Files", "Minecraft"]        
+        for pathName in directories:
+            path = curDir + "/../" + pathName
+            if not os.path.isdir(path):
+                print("Directory for " + pathName + " doesnt exist in base directory, creating path now.")
+                os.mkdir(path)
+            
+
 
 
 ########################################################################
