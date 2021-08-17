@@ -368,8 +368,10 @@ class SteamLobbyHandler():
             lobbyEmbed.set_footer(text="Currently " + str(count) + " lobbies are open.")
 
         for lobby in self.lobbies:
-            gameName = "***" + self.lobbies[lobby].gameName + "***  "
-            hostName = "Host: " + self.lobbies[lobby].hostName + " Player Count: " + str(self.lobbies[lobby].playerCount)
+            thisLobby = self.lobbies[lobby]
+            gameName = "***" + thisLobby.gameName + "***  "
+            hostName = "Host: " + thisLobby.hostName + " Player Count: " + str(self.lobbies[lobby].playerCount)
+            hostName += "  [Lobby](" + thisLobby.originalMessage.jump_url + ")"
             lobbyEmbed.add_field(name=gameName, value=hostName,inline=False)
 
         if self.lobbyMessage != None:
@@ -396,8 +398,10 @@ class SteamLobbyHandler():
             lobbyEmbed.set_footer(text="Currently " + str(count) + " lobbies are open.")
 
         for lobby in self.lobbies:
-            gameName = "***" + self.lobbies[lobby].gameName + "***  "
-            hostName = "Host: " + self.lobbies[lobby].hostName + " Player Count: " + str(self.lobbies[lobby].playerCount)
+            thisLobby = self.lobbies[lobby]
+            gameName = "***" + thisLobby.gameName + "***  "
+            hostName = "Host: " + thisLobby.hostName + " Player Count: " + str(self.lobbies[lobby].playerCount)
+            hostName += "  [Lobby](" + thisLobby.originalMessage.jump_url + ")"
             lobbyEmbed.add_field(name=gameName, value=hostName,inline=False)
         
         try:
@@ -524,7 +528,6 @@ class steamLobby():
         # check status of players and ensure that they're in the lobby
         # https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key=<keyhere>&steamids=<csv steamid64 keys>
         # 5355C4BC38BDD5BE29B4CE3DA2495936
-
         
         await self.originalMessage.edit(embed=self.messageEmbed)
         await self.originalMessage.add_reaction(self.thumbsUP)
@@ -568,7 +571,7 @@ class steamLobby():
                             selectedPlayerIndex = self.players[index]
                             if selectedPlayerIndex[0] > playerIndex:
                                 selectedPlayerIndex[0] = selectedPlayerIndex - 1
-                                
+
                         self.players[steamid][0] = -1
                         self.playerCount -= 1
                     else:
