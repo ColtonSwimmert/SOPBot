@@ -16,15 +16,14 @@ class SteamLobbyHandler():
 
     def __init__(self,discordClient = None):        
         # Create Dictionary for Games that this Server will usually play
-        
+
+
+
+        # change to SOPmain to taking in these params
         try:    
             self.gamesFile = open("steamGames.json", "r")
             self.gamesList = json.load(self.gamesFile)
             self.gamesFile.close()
-
-            self.accountLinksFile = open("steamUsers.json", "r")
-            self.accountLinks = json.load(self.accountLinksFile)
-            self.accountLinksFile.close()
 
         except (IOError,ValueError) as e:
 
@@ -35,10 +34,19 @@ class SteamLobbyHandler():
             steamGamesFile.write(str(self.gamesList))
             steamGamesFile.close()
 
+        try:
+            self.accountLinksFile = open("steamUsers.json", "r")
+            self.accountLinks = json.load(self.accountLinksFile)
+            self.accountLinksFile.close()
+
+        except (IOError,ValueError) as e:
             accountsFile = open("steamUsers.json", "w")
             self.accountLinks = {}
             accountsFile.write(str(self.accountLinks))
             accountsFile.close()
+
+
+
 
         # Handler commands
         self.commands = {
@@ -62,9 +70,8 @@ class SteamLobbyHandler():
         self.thumbsUP = "👍"
 
         # lobby tracker vars
-        #self.lobbyEmbed = discord.Embed(title = "Open Lobbies")
         self.lobbyMessage = None
-        #self.lobbyThumbNail = "junyaTHUMB.jpg"
+        self.lobbyThumbNail = "junyaTHUMB.jpg"
 
     async def default(self,message):
         pass
@@ -95,11 +102,11 @@ class SteamLobbyHandler():
             await message.channel.send("Error getting link")
             return
 
-        appID = re.split("[/]+", lobbyLink)[2]
-        lobbyID = re.split("[/]+", lobbyLink)[3]
+        # index 2 : appID, index 3: lobbyID
+        gameDetails = re.split("[/]+", lobbyLink)  
 
         # check if games data is already stored
-        if self.gamesList.get(appID,None) == None:
+        if self.gamesList.get(gameDetails[2],None) == None:
             if not self.addGame(appID):
                 await message.channel.send("Error id")
                 return
@@ -141,7 +148,6 @@ class SteamLobbyHandler():
                 print("Unable to add game data to SOPBot")
                 return
         
-        #lobbyMessage = host.name + "'s " + game["Name"] + " lobby: " + lobbyLink
         embeddedMessage = self.generateEmbedMessage(appID, host, lobbyLink)
         await message.channel.send(embed=embeddedMessage)
 
@@ -182,6 +188,10 @@ class SteamLobbyHandler():
                     print(lobby.hostName + "'s lobby message already deleted")
                 await tempPointer.add_reaction(self.thumbsUP)
                 lobby.originalMessage = tempPointer
+            
+            # Update openlobbies embed list
+            if self.lobbyMessage != None:
+                await self.updateOpenLobbies()
             return
 
         steamID = self.accountLinks.get(str(hostID), None)
@@ -233,15 +243,16 @@ class SteamLobbyHandler():
                     message.content = splitString[1]
                     await self.addNote(message,False)
 
-        # Update openlobbies embed list
-        if self.lobbyMessage != None:
-            await self.updateOpenLobbies()
-
 
         if self.lobbies[hostID].imageFile == None:
             self.lobbies[hostID].originalMessage = await message.channel.send(embed=embeddedMessage)
         else:
             self.lobbies[hostID].originalMessage = await message.channel.send(file=self.lobbies[hostID].imageFile, embed=embeddedMessage)
+        
+        # Update openlobbies embed list
+        if self.lobbyMessage != None:
+           await self.updateOpenLobbies()
+        
         await self.lobbies[hostID].updatePlayers()
         
 
@@ -388,6 +399,7 @@ class SteamLobbyHandler():
         imageFile = discord.File(fileName, filename=fileName)
         lobbyEmbed.set_thumbnail(url="attachment://" + fileName)
 
+        print("update called")
         # display count of lobbies open
         count = len(self.lobbies)
         if count == 0:
@@ -404,11 +416,13 @@ class SteamLobbyHandler():
             hostName += "  [Lobby](" + thisLobby.originalMessage.jump_url + ")"
             lobbyEmbed.add_field(name=gameName, value=hostName,inline=False)
         
-        try:
+        if self.lobbyMessage != None:
             await self.lobbyMessage.edit(embed=lobbyEmbed)
-        except Exception:
-            # lobby message most likely deleted
-            await self.lobbyMessage.channel.send(file=imageFile,embed=lobbyEmbed)
+            # try:
+            #     
+            # except Exception:
+            #     # lobby message most likely deleted
+            #     await self.lobbyMessage.channel.send(file=imageFile,embed=lobbyEmbed)
 
 
     async def closeLobby(self, message):
@@ -451,7 +465,7 @@ class SteamLobbyHandler():
             requestOutput = requests.get(message.content)
         except Exception:
             print("Invalid image URL.")
-
+        
         if requestOutput != None and requestOutput.status_code == 200:
             lobby.imageName = message.content
             lobby.imagePath = None
@@ -459,17 +473,17 @@ class SteamLobbyHandler():
 
             if post:
                 tempPointer = await lobby.originalMessage.channel.send(embed=lobby.messageEmbed)
-
                 await lobby.originalMessage.delete()
                 await tempPointer.add_reaction(self.thumbsUP)
                 lobby.originalMessage = tempPointer
                 await message.delete()
+                await self.updateOpenLobbies()
             return
         
         elif len(message.attachments) > 0:
             # see if an attachment was made for this message
             print("do noting for now since Idk what to do yet haha.")
-
+        
         # default
         lobby.imagePath, lobby.imageName = self.client.handlers["~"].retrieveFilePath(message.content) 
         if lobby.imageName == None and post:
@@ -479,14 +493,16 @@ class SteamLobbyHandler():
         imageFile = discord.File(lobby.imagePath, filename=lobby.imageName)
         lobby.messageEmbed.set_image(url="attachment://" + lobby.imageName)
         lobby.imageFile = imageFile
+        
         if post:
             tempPointer = await lobby.originalMessage.channel.send(file=imageFile,embed=lobby.messageEmbed)
-
             # reset message with reactions 
             #await lobby.originalMessage.clear_reactions()
             await lobby.originalMessage.delete()
             await tempPointer.add_reaction(self.thumbsUP)
             lobby.originalMessage = tempPointer
+            
+            await self.updateOpenLobbies()
 
 class steamLobby():
     # Handle updating players and retreiving if lobby is still open
@@ -559,18 +575,18 @@ class steamLobby():
 
                     if self.playerCount > 1:
                         # remove this player and shift other players down one position
-                        playerIndex = self.players[steamid][0]
-                        self.messageEmbed.remove_field(int(playerIndex)) # remove field will auto shift indexes, but name/values will remain same
+                        playerIndex = int(self.players[steamid][0])
+                        self.messageEmbed.remove_field(playerIndex) # remove field will auto shift indexes, but name/values will remain same
                         for fieldIndex in range(len(self.messageEmbed.fields)):
                             origValue = self.messageEmbed.fields[fieldIndex].value
-                            self.messageEmbed.set_field_at(fieldIndex,name= "Player#" + str(fieldIndex), value=origValue)
+                            self.messageEmbed.set_field_at(fieldIndex,name= "Player#" + str(fieldIndex + 1), value=origValue)
                         await self.originalMessage.edit(embed=self.messageEmbed)
 
-                        for index in range(len(self.players)):
+                        for index in self.players:
                             # adjust player positions in dictionary
-                            selectedPlayerIndex = self.players[index]
-                            if selectedPlayerIndex[0] > playerIndex:
-                                selectedPlayerIndex[0] = selectedPlayerIndex - 1
+                            selectedPlayerIndex = int(self.players[index][0])
+                            if selectedPlayerIndex > playerIndex:
+                                self.players[index][0] = selectedPlayerIndex - 1
 
                         self.players[steamid][0] = -1
                         self.playerCount -= 1
